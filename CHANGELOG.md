@@ -1,5 +1,20 @@
 # @pgbeam/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- 7427b6b: Publish the CLI to npm as `@pgbeam/cli`, and to Homebrew through the `sferarc/pgbeam` tap.
+
+  The package was private and its `bin` pointed at a TypeScript source file, so neither `npx @pgbeam/cli` nor `npm i -g @pgbeam/cli` could work. It now ships a bundled ESM entry point with a `#!/usr/bin/env node` shebang, built by bunchee like the other published packages, and runs on plain Node 20.19 or newer with no bun installed. The self-contained native binaries are unchanged and still built by `bun build --compile`; they are now also published as a GitHub release with checksums, which is what the Homebrew formula pins.
+
+  `pgbeam update` and the background upgrade check used to fall back to the GitHub releases of the private monorepo, which answers 404 for everyone. They now read the public CLI repository, and its release tags are `vX.Y.Z`.
+
+### Patch Changes
+
+- Updated dependencies [6bf2e14]
+  - pgbeam@0.4.8
+
 ## 0.2.16
 
 ### Patch Changes

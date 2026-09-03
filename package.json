@@ -1,6 +1,6 @@
 {
   "name": "@pgbeam/cli",
-  "version": "0.2.16",
+  "version": "0.3.0",
   "description": "Command line interface for PgBeam, a Postgres proxy for safe AI agent access with policy enforcement in the wire protocol",
   "type": "module",
   "bin": {
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "8.7.1",
-    "pgbeam": "^0.4.7",
+    "pgbeam": "^0.4.8",
     "citty": "0.2.2",
     "consola": "3.4.2"
   },
