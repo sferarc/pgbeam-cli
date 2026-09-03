@@ -1,5 +1,13 @@
 # @pgbeam/cli
 
+## 0.3.1
+
+### Patch Changes
+
+- dd2e970: chore(format): reflow prose to one line per paragraph, and let CI see it
+- Updated dependencies [dd2e970]
+  - pgbeam@0.4.9
+
 ## 0.3.0
 
 ### Minor Changes
@@ -287,8 +295,7 @@
 
 ### Patch Changes
 
-- ddbaa4f: fix(cli): inject version define in CI builds to fix binary
-  verification
+- ddbaa4f: fix(cli): inject version define in CI builds to fix binary verification
 
 ## 0.1.1
 
