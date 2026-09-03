@@ -1,0 +1,56 @@
+{
+  "name": "@pgbeam/cli",
+  "version": "0.2.16",
+  "description": "Command line interface for PgBeam, a Postgres proxy for safe AI agent access with policy enforcement in the wire protocol",
+  "type": "module",
+  "bin": {
+    "pgbeam": "./dist/bin/pgbeam.js"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "pgbeam",
+    "cli",
+    "ai-agents",
+    "mcp",
+    "postgresql",
+    "postgres",
+    "proxy",
+    "connection-pooling",
+    "query-caching"
+  ],
+  "homepage": "https://pgbeam.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sferarc/pgbeam-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sferarc/pgbeam-cli/issues"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "bun run src/bin/pgbeam.ts",
+    "build": "bunchee",
+    "build:binaries": "bash scripts/build-all.sh",
+    "prepublishOnly": "pnpm build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "8.7.1",
+    "pgbeam": "^0.4.7",
+    "citty": "0.2.2",
+    "consola": "3.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "bunchee": "7.0.1",
+    "typescript": "7.0.2"
+  }
+}
