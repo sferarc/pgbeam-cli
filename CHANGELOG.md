@@ -1,5 +1,13 @@
 # @pgbeam/cli
 
+## 0.3.2
+
+### Patch Changes
+
+- 39213c0: Remove em dashes from CLI prose. The root help description, the management MCP server's instructions and tool summaries, several command descriptions, two error messages and a handful of code comments used em dashes, which `CLAUDE.md` rule 10 forbids in prose. They are now commas, colons, parentheses or separate sentences.
+
+  Em dashes used typographically rather than as prose punctuation are unchanged: the `—` placeholder for a missing `statement_kind` in `approvals list`, and the label separators in `auth switch`, `agents secrets` and `agents mcp-config`.
+
 ## 0.3.1
 
 ### Patch Changes
