@@ -10,7 +10,7 @@ const main = defineCommand({
   meta: {
     name: "pgbeam",
     version: VERSION,
-    description: "PgBeam CLI — manage your PostgreSQL proxy platform",
+    description: "PgBeam CLI, manage your PostgreSQL proxy platform",
   },
   args: {
     ...globalArgs,

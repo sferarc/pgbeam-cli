@@ -9,13 +9,13 @@ import type { GlobalArgs } from "../lib/flags.js";
  * code-generation clients. Mirrors the hosted Go management MCP.
  */
 const INSTRUCTIONS =
-  "PgBeam management MCP — administer your PgBeam account (projects, databases, policy profiles, agent credentials, audit, approvals, billing) over the REST API.\n\n" +
+  "PgBeam management MCP: administer your PgBeam account (projects, databases, policy profiles, agent credentials, audit, approvals, billing) over the REST API.\n\n" +
   "Only three tools are exposed regardless of API size:\n" +
-  "- search_endpoints({query}) — find operations by intent; returns a compact list (id, method, path).\n" +
-  "- describe_endpoint({operation_id}) — one operation's inputs and success response, rendered as compact TypeScript types (path/query params, request body, response). $refs are resolved inline.\n" +
-  "- call_endpoint({operation_id, path_params, query_params, body}) — invoke it.\n\n" +
+  "- search_endpoints({query}): find operations by intent; returns a compact list (id, method, path).\n" +
+  "- describe_endpoint({operation_id}): one operation's inputs and success response, rendered as compact TypeScript types (path/query params, request body, response). $refs are resolved inline.\n" +
+  "- call_endpoint({operation_id, path_params, query_params, body}): invoke it.\n\n" +
   "Flow: search → describe → call. Work top-down and chain ids: create/list a project to get its project_id, then pass it as a path_param to project-scoped operations (agents, databases, policies, audit). Resource ids returned by one call are the path_params of the next.\n\n" +
-  "Auth: this CLI server dispatches with your configured PgBeam credentials (--token / profile). Errors are returned as tool results (isError=true) with the upstream status and message — read the message and adjust the arguments.";
+  "Auth: this CLI server dispatches with your configured PgBeam credentials (--token / profile). Errors are returned as tool results (isError=true) with the upstream status and message. Read the message and adjust the arguments.";
 
 /**
  * MCP tool annotations (readOnlyHint/destructiveHint/idempotentHint) let clients
@@ -317,7 +317,7 @@ function handleDescribe(input: Record<string, unknown>): unknown {
   const id = String(input.operation_id ?? "").trim();
   const ep = ENDPOINTS.get(id);
   if (!ep) {
-    throw new Error(`unknown operation_id "${id}" — use search_endpoints to find valid ids`);
+    throw new Error(`unknown operation_id "${id}" : use search_endpoints to find valid ids`);
   }
   // Compact TypeScript types for inputs + success response, matching the hosted
   // Go management MCP. Falls back to the operation-map basics if the pregenerated
@@ -367,7 +367,7 @@ async function handleCall(input: Record<string, unknown>, args: GlobalArgs): Pro
   const id = String(input.operation_id ?? "").trim();
   const ep = ENDPOINTS.get(id);
   if (!ep) {
-    throw new Error(`unknown operation_id "${id}" — use search_endpoints to find valid ids`);
+    throw new Error(`unknown operation_id "${id}" : use search_endpoints to find valid ids`);
   }
 
   const pathParams = asStringMap(input.path_params);

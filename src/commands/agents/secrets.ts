@@ -15,7 +15,7 @@ import {
  * When `client` is undefined, config for all clients is printed.
  */
 export function printAgentSecrets(secrets: AgentCredentialSecrets, client?: McpClient): void {
-  consola.warn("Store these now — they will not be shown again:");
+  consola.warn("Store these now, they will not be shown again:");
   consola.box(
     [
       `Connection string:\n  ${secrets.connection_string}`,

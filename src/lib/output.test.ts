@@ -117,7 +117,7 @@ describe("outputTable", () => {
 
     outputTable(rows as unknown as Record<string, unknown>[]);
 
-    // Should not throw — null/undefined rendered as ""
+    // Should not throw, null/undefined rendered as ""
     expect(consola.log).toHaveBeenCalledTimes(3);
   });
 

@@ -70,12 +70,12 @@ export default defineCommand({
 
       output(result, args.json, () => {
         if (result.safe && result.findings.length === 0) {
-          consola.success("Migration is safe — no blocking findings.");
+          consola.success("Migration is safe, no blocking findings.");
           return;
         }
 
         if (result.safe) {
-          consola.success("Migration is safe — no blocking findings.");
+          consola.success("Migration is safe, no blocking findings.");
         } else {
           consola.warn("Migration has findings:");
         }

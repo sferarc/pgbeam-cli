@@ -135,7 +135,7 @@ export async function checkForUpdates(): Promise<void> {
       return;
     }
 
-    // Fetch in background — don't block CLI execution
+    // Fetch in background, don't block CLI execution
     const latest = await fetchLatestVersion();
     if (!latest) return;
 

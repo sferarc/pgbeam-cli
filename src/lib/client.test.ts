@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
-// Mocks — must come before imports
+// Mocks, must come before imports
 // ---------------------------------------------------------------------------
 vi.mock("pgbeam", async (importOriginal) => {
   // Keep the real ApiError so rawRequest failures can be asserted on; only the
@@ -56,7 +56,7 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// resolveContext — token resolution
+// resolveContext, token resolution
 // ---------------------------------------------------------------------------
 describe("resolveContext", () => {
   describe("token resolution priority", () => {

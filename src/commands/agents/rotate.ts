@@ -13,7 +13,7 @@ export default defineCommand({
     description: "Rotate an agent credential's secrets",
     docs: {
       longDescription:
-        "Generate a new Postgres password and MCP token for an existing credential, keeping its id, username, name, and policy. Connections using the old password are dropped within seconds. The new secrets are shown once and cannot be retrieved again — update your agent before its next call. A ready-to-paste MCP client config is printed alongside the secrets.",
+        "Generate a new Postgres password and MCP token for an existing credential, keeping its id, username, name, and policy. Connections using the old password are dropped within seconds. The new secrets are shown once and cannot be retrieved again, so update your agent before its next call. A ready-to-paste MCP client config is printed alongside the secrets.",
       examples: [
         { comment: "Rotate a credential's secrets", command: "pgbeam agents rotate agt_xxx" },
         {

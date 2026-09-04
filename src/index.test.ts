@@ -88,7 +88,7 @@ describe("CLI main entry (index.ts)", () => {
 
     expect(meta.name).toBe("pgbeam");
     expect(meta.version).toBe("0.0.0-test");
-    expect(meta.description).toBe("PgBeam CLI — manage your PostgreSQL proxy platform");
+    expect(meta.description).toBe("PgBeam CLI, manage your PostgreSQL proxy platform");
   });
 
   it("registers all top-level subcommands", () => {

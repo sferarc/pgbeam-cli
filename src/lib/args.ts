@@ -78,9 +78,9 @@ const expiryUnitMillis = {
  *
  * Accepts either:
  * - a relative duration shorthand `<number><unit>` where unit is one of
- *   `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks) —
- *   e.g. `30d`, `12h`, `90m`, `2w`, `3600s` — returning `now + duration`; or
- * - an absolute ISO 8601 datetime (e.g. `2026-12-31T23:59:00Z`) — returning it
+ *   `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks),
+ *   e.g. `30d`, `12h`, `90m`, `2w`, `3600s`, returning `now + duration`; or
+ * - an absolute ISO 8601 datetime (e.g. `2026-12-31T23:59:00Z`), returning it
  *   normalized via `Date.prototype.toISOString()`.
  *
  * Throws an `Error` for unparseable input, zero/negative durations, unknown

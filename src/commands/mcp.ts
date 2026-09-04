@@ -8,7 +8,7 @@ export default defineCommand({
     icon: "Bot",
     docs: {
       longDescription:
-        "Start a Model Context Protocol (MCP) server using stdio transport. This allows AI coding assistants like Claude Code, Cursor, and other MCP-compatible clients to manage PgBeam projects, databases, and cache rules directly. Rather than one tool per endpoint, the server exposes three meta-tools — search_endpoints, describe_endpoint, and call_endpoint — so the agent discovers and invokes the API it needs without loading dozens of tool schemas up front.",
+        "Start a Model Context Protocol (MCP) server using stdio transport. This allows AI coding assistants like Claude Code, Cursor, and other MCP-compatible clients to manage PgBeam projects, databases, and cache rules directly. Rather than one tool per endpoint, the server exposes three meta-tools (search_endpoints, describe_endpoint, and call_endpoint) so the agent discovers and invokes the API it needs without loading dozens of tool schemas up front.",
       examples: [
         { comment: "Start the MCP server", command: "pgbeam mcp" },
         {
@@ -17,7 +17,7 @@ export default defineCommand({
         },
       ],
       response:
-        "Starts the MCP server and listens for JSON-RPC messages on stdin/stdout. The server runs until the process is terminated. No human-readable output is produced — all communication is via the MCP protocol.",
+        "Starts the MCP server and listens for JSON-RPC messages on stdin/stdout. The server runs until the process is terminated. No human-readable output is produced. All communication is via the MCP protocol.",
     },
   },
   args: {

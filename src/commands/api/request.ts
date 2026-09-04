@@ -45,7 +45,7 @@ export default defineCommand({
     description: "Make a raw API request",
     docs: {
       longDescription:
-        "Make a direct HTTP request to the PgBeam API. Supports path parameter interpolation — if the path matches a known API route template, path parameters are extracted automatically. Use `--data` (or `-d`) to send a JSON request body. Every request is authenticated via the active profile (or `--token` / `PGBEAM_API_KEY`), including reads like `/v1/regions`.",
+        "Make a direct HTTP request to the PgBeam API. Supports path parameter interpolation: if the path matches a known API route template, path parameters are extracted automatically. Use `--data` (or `-d`) to send a JSON request body. Every request is authenticated via the active profile (or `--token` / `PGBEAM_API_KEY`), including reads like `/v1/regions`.",
       examples: [
         {
           comment: "List all regions",

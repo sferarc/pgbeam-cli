@@ -134,7 +134,7 @@ describe("migrations lint", () => {
 
     await lintCommand.run?.({ args: buildArgs({ sql: "SELECT 1;" }) } as never);
 
-    expect(consola.success).toHaveBeenCalledWith("Migration is safe — no blocking findings.");
+    expect(consola.success).toHaveBeenCalledWith("Migration is safe, no blocking findings.");
     expect(consola.warn).not.toHaveBeenCalled();
   });
 

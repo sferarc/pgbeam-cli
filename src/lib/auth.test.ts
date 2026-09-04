@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
-// Mocks — must come before imports
+// Mocks, must come before imports
 // ---------------------------------------------------------------------------
 vi.mock("@inquirer/prompts", () => ({
   input: vi.fn(),

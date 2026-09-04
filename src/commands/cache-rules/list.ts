@@ -13,7 +13,7 @@ export default defineCommand({
     description: "List cache rules for a database",
     docs: {
       longDescription:
-        "List all tracked query shapes and their caching status for a database. Shows the query hash, a truncated SQL pattern, query type, whether caching is enabled, call count, average latency, and PgBeam's caching recommendation. Results are paginated — use `--page-size` and `--page-token` to navigate pages.",
+        "List all tracked query shapes and their caching status for a database. Shows the query hash, a truncated SQL pattern, query type, whether caching is enabled, call count, average latency, and PgBeam's caching recommendation. Results are paginated. Use `--page-size` and `--page-token` to navigate pages.",
       examples: [
         {
           comment: "List cache rules for a database",
