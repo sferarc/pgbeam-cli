@@ -788,6 +788,10 @@ export const commandManifest: GeneratedCommand[] = [
           label: "Port",
         },
         {
+          key: "role",
+          label: "Role",
+        },
+        {
           key: "created_at",
           label: "Created At",
           date: true,
@@ -803,6 +807,10 @@ export const commandManifest: GeneratedCommand[] = [
         {
           key: "username",
           label: "Username",
+        },
+        {
+          key: "ssl_mode",
+          label: "SSL Mode",
         },
         {
           key: "pool_region",
@@ -868,13 +876,13 @@ export const commandManifest: GeneratedCommand[] = [
           label: "Port",
         },
         {
+          key: "role",
+          label: "Role",
+        },
+        {
           key: "created_at",
           label: "Created At",
           date: true,
-        },
-        {
-          key: "project_id",
-          label: "Project ID",
         },
       ],
     },
@@ -1814,6 +1822,10 @@ export const commandManifest: GeneratedCommand[] = [
           label: "Name",
         },
         {
+          key: "status",
+          label: "Status",
+        },
+        {
           key: "created_at",
           label: "Created At",
           date: true,
@@ -1853,6 +1865,10 @@ export const commandManifest: GeneratedCommand[] = [
         {
           key: "default_policy_profile_id",
           label: "Default Policy Profile ID",
+        },
+        {
+          key: "residency",
+          label: "Residency",
         },
         {
           key: "agents_disabled",
@@ -1919,6 +1935,10 @@ export const commandManifest: GeneratedCommand[] = [
           label: "Name",
         },
         {
+          key: "status",
+          label: "Status",
+        },
+        {
           key: "created_at",
           label: "Created At",
           date: true,
@@ -1930,10 +1950,6 @@ export const commandManifest: GeneratedCommand[] = [
         {
           key: "description",
           label: "Description",
-        },
-        {
-          key: "cloud",
-          label: "Cloud",
         },
       ],
     },
