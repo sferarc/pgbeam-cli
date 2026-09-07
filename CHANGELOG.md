@@ -1,5 +1,17 @@
 # @pgbeam/cli
 
+## 0.3.4
+
+### Patch Changes
+
+- e1229b0: fix(cli): tables dropped every field whose schema is a named type
+
+  `pgbeam db list` did not show which databases are replicas, `pgbeam db inspect` did not show `ssl_mode`, and `pgbeam projects list` did not show whether a project is running. All three are fields the contract declares and the API returns.
+
+  The manifest generator keeps a column only when it can read a scalar `type` off the response property, and a property that points at a named schema is a `$ref` carrying no `type`. Nothing failed: the manifest is generated and checked in, so a column that never appeared looked like a column nobody wanted. Both the parameter and the response paths now resolve one level of `$ref` before deciding.
+
+  `db list` and `projects list` are at the eight-column limit, so each drops its lowest-priority column to make room: `project_id` on a project-scoped database list, and `cloud` on the project list.
+
 ## 0.3.3
 
 ### Patch Changes
