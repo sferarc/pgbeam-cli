@@ -29,6 +29,14 @@ import projectsCommand from "./projects/index.js";
 import replicasCommand from "./replicas/index.js";
 import webhooksCommand from "./webhooks/index.js";
 
+/**
+ * How many times the imports above called `defineCommand`, read here rather than
+ * inside the test. Every call happens while these modules load, and vitest 5
+ * clears recorded mock calls before each test, so by the time an `it()` runs the
+ * mock no longer remembers any of them.
+ */
+const defineCommandCalls = vi.mocked(defineCommand).mock.calls.length;
+
 const commands: Record<string, Record<string, unknown>> = {
   account: accountCommand,
   agents: agentsCommand,
@@ -165,7 +173,7 @@ const expectedSubCommands: Record<string, string[]> = {
 
 describe("command index files", () => {
   it("calls defineCommand for every command module", () => {
-    expect(vi.mocked(defineCommand)).toHaveBeenCalledTimes(22);
+    expect(defineCommandCalls).toBe(22);
   });
 
   for (const [key, command] of Object.entries(commands)) {

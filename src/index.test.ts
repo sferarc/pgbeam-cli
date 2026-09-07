@@ -49,6 +49,17 @@ const rootDefinition = defineCommandMock.mock.calls[0][0] as Record<string, unkn
 const rootCommand: unknown = defineCommandMock.mock.results[0].value;
 
 /**
+ * What `index.js` handed `runMain`, and whether it asked for an upgrade check,
+ * captured for the same reason and for one more: vitest 5 clears recorded mock
+ * calls before every test, so a mock read inside an `it()` shows nothing of what
+ * happened while the module loaded. These two are only ever called at load, so
+ * the assertions below run against the snapshot, copied rather than aliased so
+ * that how vitest resets a mock cannot empty it underneath.
+ */
+const runMainCalls = [...runMainMock.mock.calls];
+const upgradeCheckCalls = vi.mocked(checkForUpdates).mock.calls.length;
+
+/**
  * Call every subcommand loader once, here at module scope, and settle what they
  * return.
  *
@@ -172,14 +183,12 @@ describe("CLI main entry (index.ts)", () => {
   });
 
   it("calls runMain with the command definition and the examples-aware help renderer", () => {
-    expect(runMainMock).toHaveBeenCalledTimes(1);
-    expect(runMainMock).toHaveBeenCalledWith(rootCommand, {
-      showUsage: expect.any(Function),
-    });
+    expect(runMainCalls).toHaveLength(1);
+    expect(runMainCalls[0]).toEqual([rootCommand, { showUsage: expect.any(Function) }]);
   });
 
   it("calls checkForUpdates on module load", () => {
-    expect(checkForUpdates).toHaveBeenCalled();
+    expect(upgradeCheckCalls).toBeGreaterThan(0);
   });
 
   it("subcommand loaders return promises", () => {
