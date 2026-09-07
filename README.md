@@ -109,7 +109,7 @@ Full command reference at [pgbeam.com/docs/cli](https://pgbeam.com/docs/cli).
 
 ## Contributing
 
-This repository is a read-only mirror of a directory in PgBeam's monorepo, kept in sync automatically. Pull requests opened here are synced back, so they are welcome; expect the merge to land through that sync rather than directly.
+Issues and pull requests are welcome here. Changes are synchronised with the repository the CLI is developed in, so a merged pull request travels back rather than being reapplied by hand.
 
 ## License
 
