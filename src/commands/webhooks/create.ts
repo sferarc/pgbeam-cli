@@ -1,7 +1,11 @@
 import { input } from "@inquirer/prompts";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import type { WebhookEndpointInput, WebhookEndpointInputFormatEnumKey } from "pgbeam";
+import type {
+  WebhookEndpointInput,
+  WebhookEndpointInputFormatEnumKey,
+  WebhookEventTypeKey,
+} from "pgbeam";
 import { optionalArg, parseEnum } from "../../lib/args.js";
 
 /** Webhook delivery format enum values matching the SDK type. */
@@ -11,6 +15,31 @@ const webhookFormats = {
   datadog: "datadog",
   elastic: "elastic",
 } satisfies Record<string, WebhookEndpointInputFormatEnumKey>;
+
+/**
+ * The event types a subscription can name, matching the SDK type.
+ *
+ * `--event` used to take any string, so a typo (or a plausible-looking value
+ * that is not a real event type) was accepted and produced a subscription that
+ * would never fire. Now the contract declares the set and the CLI checks
+ * against it.
+ *
+ * `satisfies Record<string, WebhookEventTypeKey>` is what keeps this honest: if
+ * the contract's enum changes, a value here that is no longer in it stops
+ * compiling.
+ */
+const webhookEventTypes = {
+  query_blocked: "query_blocked",
+  budget_exhausted: "budget_exhausted",
+  kill_switch: "kill_switch",
+  masked: "masked",
+  migration_flagged: "migration_flagged",
+  approval_requested: "approval_requested",
+  anomaly_alert: "anomaly_alert",
+  canary_tripped: "canary_tripped",
+  audit_checkpoint: "audit_checkpoint",
+  "webhook.test": "webhook.test",
+} satisfies Record<string, WebhookEventTypeKey>;
 
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
@@ -33,7 +62,7 @@ export default defineCommand({
         {
           comment: "Create a Datadog webhook for specific events",
           command:
-            "pgbeam webhooks create https://example.com/hook --format datadog --event query.blocked,policy.updated",
+            "pgbeam webhooks create https://example.com/hook --format datadog --event query_blocked,canary_tripped",
         },
         {
           comment: "Create a disabled webhook with a secret",
@@ -84,7 +113,8 @@ export default defineCommand({
       const eventTypes = optionalArg(args.event)
         ?.split(",")
         .map((e) => e.trim())
-        .filter((e) => e.length > 0);
+        .filter((e) => e.length > 0)
+        .map((e) => parseEnum(e, webhookEventTypes, "event"));
 
       const secret = optionalArg(args.secret);
       const description = optionalArg(args.description);

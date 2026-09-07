@@ -102,6 +102,25 @@ describe("webhooks create", () => {
     });
   });
 
+  // --event took any string before the contract declared the set, so a typo, or
+  // a plausible-looking value that is not a real event type, produced a
+  // subscription that silently never fired. Both fixtures in this file were
+  // themselves using values that do not exist ("query.blocked",
+  // "policy.updated"), which is how easily it happens.
+  it("rejects an event type that is not real", async () => {
+    await expect(
+      createCommand.run?.({
+        args: buildArgs({
+          url: "https://example.com/hook",
+          format: "json",
+          event: "query.blocked",
+        }),
+      } as never),
+    ).rejects.toThrow(/Invalid event/);
+
+    expect(mockClient.webhooks.createWebhookEndpoint).not.toHaveBeenCalled();
+  });
+
   it("parses comma-separated events and includes optional fields", async () => {
     mockClient.webhooks.createWebhookEndpoint.mockResolvedValue({
       id: "wh-3",
@@ -112,7 +131,7 @@ describe("webhooks create", () => {
       args: buildArgs({
         url: "https://example.com/hook",
         format: "datadog",
-        event: "query.blocked, policy.updated ,",
+        event: "query_blocked, canary_tripped ,",
         secret: "s3cr3t",
         description: "my hook",
         disabled: true,
@@ -125,7 +144,7 @@ describe("webhooks create", () => {
         url: "https://example.com/hook",
         format: "datadog",
         enabled: false,
-        event_types: ["query.blocked", "policy.updated"],
+        event_types: ["query_blocked", "canary_tripped"],
         secret: "s3cr3t",
         description: "my hook",
       },
