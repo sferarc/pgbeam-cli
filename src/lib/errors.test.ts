@@ -55,6 +55,59 @@ describe("runCommand", () => {
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
+  // The API answers with a problem document, so an ApiError carries the code
+  // and the field errors. The code goes on the error line because it is what
+  // tells two conditions sharing a status apart.
+  it("puts the problem document's code on the error line", async () => {
+    const problem = {
+      type: "https://pgbeam.com/docs/api/errors/plan-limit-reached",
+      title: "Plan limit reached",
+      status: 403,
+      detail: "project limit reached: your plan allows 3 projects",
+      code: "PLAN_LIMIT_REACHED",
+    };
+    const apiError = Object.assign(new Error(problem.detail), {
+      status: 403,
+      code: problem.code,
+      body: problem,
+    });
+
+    await expect(
+      runCommand(async () => {
+        throw apiError;
+      }),
+    ).rejects.toThrow("process.exit");
+
+    expect(consola.error).toHaveBeenCalledWith(
+      "API error (403 PLAN_LIMIT_REACHED): project limit reached: your plan allows 3 projects",
+    );
+    // The document is already fully printed, so it must not be dumped again.
+    expect(consola.log).not.toHaveBeenCalled();
+  });
+
+  it("lists field errors under the message", async () => {
+    const apiError = Object.assign(new Error("database host is required"), {
+      status: 400,
+      code: "INVALID_INPUT",
+      errors: [{ field: "database.host", detail: "database host is required" }],
+      body: {
+        type: "https://pgbeam.com/docs/api/errors/invalid-input",
+        title: "Invalid input",
+        status: 400,
+        code: "INVALID_INPUT",
+        detail: "database host is required",
+      },
+    });
+
+    await expect(
+      runCommand(async () => {
+        throw apiError;
+      }),
+    ).rejects.toThrow("process.exit");
+
+    expect(consola.log).toHaveBeenCalledWith("  database.host: database host is required");
+  });
+
   it("prints a remediation hint for common statuses", async () => {
     await expect(
       runCommand(async () => {
