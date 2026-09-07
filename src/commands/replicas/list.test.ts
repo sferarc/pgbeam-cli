@@ -70,14 +70,58 @@ describe("replicas list", () => {
 
     expect(mockClient.projects.listReplicas).toHaveBeenCalledWith({
       pathParams: { database_id: "db-1" },
+      queryParams: { page_size: 100 },
     });
+  });
+
+  it("follows every page before rendering replicas", async () => {
+    mockClient.projects.listReplicas
+      .mockResolvedValueOnce({
+        replicas: [{ id: "rep-1", host: "one", port: 5432, ssl_mode: "require" }],
+        next_page_token: "next",
+      })
+      .mockResolvedValueOnce({
+        replicas: [{ id: "rep-2", host: "two", port: 5433, ssl_mode: "disable" }],
+        next_page_token: null,
+      });
+
+    await listCommand.run?.({
+      args: buildArgs({ "database-id": "db-1" }),
+    } as never);
+
+    expect(mockClient.projects.listReplicas).toHaveBeenNthCalledWith(2, {
+      pathParams: { database_id: "db-1" },
+      queryParams: { page_size: 100, page_token: "next" },
+    });
+    expect(outputTable).toHaveBeenCalledWith(
+      [
+        { id: "rep-1", host: "one", port: 5432, ssl: "require" },
+        { id: "rep-2", host: "two", port: 5433, ssl: "disable" },
+      ],
+      [
+        { key: "id", label: "ID" },
+        { key: "host", label: "Host" },
+        { key: "port", label: "Port" },
+        { key: "ssl", label: "SSL" },
+      ],
+    );
   });
 
   it("renders a table with replica data", async () => {
     mockClient.projects.listReplicas.mockResolvedValue({
       replicas: [
-        { id: "rep-1", host: "replica1.host.com", port: 5432, ssl_mode: "require" },
-        { id: "rep-2", host: "replica2.host.com", port: 5433, ssl_mode: "disable" },
+        {
+          id: "rep-1",
+          host: "replica1.host.com",
+          port: 5432,
+          ssl_mode: "require",
+        },
+        {
+          id: "rep-2",
+          host: "replica2.host.com",
+          port: 5433,
+          ssl_mode: "disable",
+        },
       ],
     });
 

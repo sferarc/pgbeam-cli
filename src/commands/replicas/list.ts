@@ -39,13 +39,25 @@ export default defineCommand({
       const ctx = resolveContext(args);
       const databaseId = requireArg(args["database-id"], "database-id");
 
-      const result = await ctx.client.projects.listReplicas({
+      const firstPage = await ctx.client.projects.listReplicas({
         pathParams: { database_id: databaseId },
+        queryParams: { page_size: 100 },
       });
+      const replicas = [...firstPage.replicas];
+      let pageToken = firstPage.next_page_token;
+      while (pageToken) {
+        const nextPage = await ctx.client.projects.listReplicas({
+          pathParams: { database_id: databaseId },
+          queryParams: { page_size: 100, page_token: pageToken },
+        });
+        replicas.push(...nextPage.replicas);
+        pageToken = nextPage.next_page_token;
+      }
+      const result = { ...firstPage, replicas, next_page_token: null };
 
       output(result, args.json, () => {
         outputTable(
-          result.replicas.map((r) => ({
+          replicas.map((r) => ({
             id: r.id,
             host: r.host,
             port: r.port,
