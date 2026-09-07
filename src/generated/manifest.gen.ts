@@ -1362,6 +1362,357 @@ export const commandManifest: GeneratedCommand[] = [
     },
   },
   {
+    command: ["orgs", "invitations", "create"],
+    aliases: ["invite"],
+    operationId: "createOrgInvitation",
+    route: "POST /v1/organizations/{org_id}/invitations",
+    method: "POST",
+    path: "/v1/organizations/{org_id}/invitations",
+    summary: "Invite someone to the organization",
+    description:
+      "Creates an invitation and emails it. Inviting an address that already has a pending invitation returns a conflict rather than a second invitation. `owner` cannot be invited: ownership transfer is a separate, higher-privilege flow.",
+    pathParams: [
+      {
+        name: "org_id",
+        source: "org",
+        description: "Unique organization identifier.",
+      },
+    ],
+    positionalName: "email",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "email",
+        type: "string",
+        required: true,
+        description: "Address to invite.",
+        bodyKey: "email",
+      },
+      {
+        name: "role",
+        type: "string",
+        required: false,
+        description:
+          "A role that can be assigned through the member API. This is `OrgRole` without `owner`: ownership is transferred through a separate flow, so requesting it here is rejected with a 400.",
+        bodyKey: "role",
+        enumValues: [
+          "admin",
+          "member",
+          "security_admin",
+          "billing_admin",
+          "auditor",
+          "policy-author",
+          "approver",
+        ],
+      },
+    ],
+    hasBody: true,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "role",
+          label: "Role",
+        },
+        {
+          key: "status",
+          label: "Status",
+        },
+        {
+          key: "expires_at",
+          label: "Expires At",
+          date: true,
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "email",
+          label: "Email",
+        },
+      ],
+    },
+  },
+  {
+    command: ["orgs", "invitations", "list"],
+    aliases: ["ls"],
+    operationId: "listOrgInvitations",
+    route: "GET /v1/organizations/{org_id}/invitations",
+    method: "GET",
+    path: "/v1/organizations/{org_id}/invitations",
+    summary: "List invitations",
+    description: "Lists invitations to join the organization and where each has got to.",
+    pathParams: [
+      {
+        name: "org_id",
+        source: "org",
+        description: "Unique organization identifier.",
+      },
+    ],
+    positionalName: null,
+    positionalRequired: false,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "status",
+        type: "string",
+        required: false,
+        description: "Filter to a single status. Omit to list every invitation.",
+        queryKey: "status",
+        enumValues: ["pending", "accepted", "rejected", "canceled"],
+      },
+    ],
+    hasBody: false,
+    paginated: true,
+    destructive: false,
+    output: {
+      kind: "list",
+      listField: "invitations",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "role",
+          label: "Role",
+        },
+        {
+          key: "status",
+          label: "Status",
+        },
+        {
+          key: "expires_at",
+          label: "Expires At",
+          date: true,
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "email",
+          label: "Email",
+        },
+      ],
+    },
+  },
+  {
+    command: ["orgs", "invitations", "revoke"],
+    aliases: [],
+    operationId: "revokeOrgInvitation",
+    route: "DELETE /v1/organizations/{org_id}/invitations/{invitation_id}",
+    method: "DELETE",
+    path: "/v1/organizations/{org_id}/invitations/{invitation_id}",
+    summary: "Revoke an invitation",
+    description: "Cancels a pending invitation so it can no longer be accepted.",
+    pathParams: [
+      {
+        name: "org_id",
+        source: "org",
+        description: "Unique organization identifier.",
+      },
+      {
+        name: "invitation_id",
+        source: "positional",
+        description:
+          "Unique organization invitation identifier. Opaque, with no type prefix. Invitations created through this API are 32 lowercase hex characters; invitations created in the dashboard carry an id of a different shape, so treat it as opaque and read it from `listOrgInvitations`.",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: true,
+    output: {
+      kind: "message",
+    },
+  },
+  {
+    command: ["orgs", "members", "list"],
+    aliases: ["ls"],
+    operationId: "listOrgMembers",
+    route: "GET /v1/organizations/{org_id}/members",
+    method: "GET",
+    path: "/v1/organizations/{org_id}/members",
+    summary: "List organization members",
+    description: "Lists the people who belong to the organization, and their roles.",
+    pathParams: [
+      {
+        name: "org_id",
+        source: "org",
+        description: "Unique organization identifier.",
+      },
+    ],
+    positionalName: null,
+    positionalRequired: false,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: true,
+    destructive: false,
+    output: {
+      kind: "list",
+      listField: "members",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "role",
+          label: "Role",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "user_id",
+          label: "User ID",
+        },
+        {
+          key: "email",
+          label: "Email",
+        },
+      ],
+    },
+  },
+  {
+    command: ["orgs", "members", "remove"],
+    aliases: [],
+    operationId: "removeOrgMember",
+    route: "DELETE /v1/organizations/{org_id}/members/{member_id}",
+    method: "DELETE",
+    path: "/v1/organizations/{org_id}/members/{member_id}",
+    summary: "Remove a member",
+    description:
+      "Removes someone from the organization. An organization must keep at least one owner, so the last remaining owner cannot be removed and cannot be demoted either: transfer ownership first.",
+    pathParams: [
+      {
+        name: "org_id",
+        source: "org",
+        description: "Unique organization identifier.",
+      },
+      {
+        name: "member_id",
+        source: "positional",
+        description:
+          "Unique organization membership identifier. Unlike the resources PgBeam mints itself, memberships carry no type prefix: the id is opaque and is assigned when the membership row is created. Read it from `listOrgMembers` rather than constructing it.",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: true,
+    output: {
+      kind: "message",
+    },
+  },
+  {
+    command: ["orgs", "members", "set-role"],
+    aliases: [],
+    operationId: "updateOrgMemberRole",
+    route: "PATCH /v1/organizations/{org_id}/members/{member_id}",
+    method: "PATCH",
+    path: "/v1/organizations/{org_id}/members/{member_id}",
+    summary: "Change a member's role",
+    description:
+      "Changes what a member is allowed to do. An organization must keep at least one owner, so the last owner cannot be demoted, and `owner` cannot be assigned here: ownership transfer is a separate, higher-privilege flow.",
+    pathParams: [
+      {
+        name: "org_id",
+        source: "org",
+        description: "Unique organization identifier.",
+      },
+      {
+        name: "member_id",
+        source: "positional",
+        description:
+          "Unique organization membership identifier. Unlike the resources PgBeam mints itself, memberships carry no type prefix: the id is opaque and is assigned when the membership row is created. Read it from `listOrgMembers` rather than constructing it.",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "role",
+        type: "string",
+        required: true,
+        description:
+          "A role that can be assigned through the member API. This is `OrgRole` without `owner`: ownership is transferred through a separate flow, so requesting it here is rejected with a 400.",
+        bodyKey: "role",
+        enumValues: [
+          "admin",
+          "member",
+          "security_admin",
+          "billing_admin",
+          "auditor",
+          "policy-author",
+          "approver",
+        ],
+      },
+    ],
+    hasBody: true,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "role",
+          label: "Role",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "user_id",
+          label: "User ID",
+        },
+        {
+          key: "email",
+          label: "Email",
+        },
+        {
+          key: "image",
+          label: "Image",
+        },
+      ],
+    },
+  },
+  {
     command: ["policies", "delete"],
     aliases: [],
     operationId: "deletePolicyProfile",

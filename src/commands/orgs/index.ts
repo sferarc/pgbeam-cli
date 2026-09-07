@@ -11,5 +11,7 @@ export default defineCommand({
     switch: () => import("./switch.js").then((m) => m.default),
     usage: () => import("./usage.js").then((m) => m.default),
     plan: () => import("./plan.js").then((m) => m.default),
+    members: () => import("./members.js").then((m) => m.default),
+    invitations: () => import("./invitations.js").then((m) => m.default),
   },
 });

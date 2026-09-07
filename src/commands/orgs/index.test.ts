@@ -8,6 +8,8 @@ vi.mock("./list.js", () => ({ default: { meta: { name: "list" } } }));
 vi.mock("./switch.js", () => ({ default: { meta: { name: "switch" } } }));
 vi.mock("./usage.js", () => ({ default: { meta: { name: "usage" } } }));
 vi.mock("./plan.js", () => ({ default: { meta: { name: "plan" } } }));
+vi.mock("./members.js", () => ({ default: { meta: { name: "members" } } }));
+vi.mock("./invitations.js", () => ({ default: { meta: { name: "invitations" } } }));
 
 import orgsCommand from "./index.js";
 
@@ -21,6 +23,6 @@ describe("orgs command", () => {
   it("lazy-loads all subcommands", async () => {
     const subCmds = orgsCommand.subCommands as Record<string, () => Promise<unknown>>;
     const results = await Promise.all(Object.values(subCmds).map((loader) => loader()));
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(7);
   });
 });

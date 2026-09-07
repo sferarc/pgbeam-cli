@@ -128,7 +128,7 @@ const expectedSubCommands: Record<string, string[]> = {
   env: ["pull"],
   honeytokens: ["list", "ls", "create", "add", "show", "inspect", "update", "delete", "rm"],
   migrations: ["lint"],
-  orgs: ["list", "ls", "switch", "usage", "plan"],
+  orgs: ["list", "ls", "switch", "usage", "plan", "members", "invitations"],
   platform: ["regions", "health"],
   policies: [
     "list",
