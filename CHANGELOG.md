@@ -1,5 +1,21 @@
 # @pgbeam/cli
 
+## 0.3.6
+
+### Patch Changes
+
+- 3f33063: fix(sdk,cli): read the API's RFC 9457 problem documents
+
+  `ApiError` now exposes `code`, `type`, `title`, `detail`, `instance`, `requestId` and `errors`, and its `message` comes from the document's `detail` rather than falling through to the status text. Branch on `code`: two conditions can share a status, and a 403 is either a permissions problem or a billing one. The CLI puts the code on the error line, lists field errors under it, and carries both in `--json` output.
+
+- Updated dependencies [3f33063]
+- Updated dependencies [022577d]
+- Updated dependencies [eca3f27]
+- Updated dependencies [c1fa878]
+- Updated dependencies [9818ecf]
+- Updated dependencies [3f33063]
+  - pgbeam@0.4.12
+
 ## 0.3.5
 
 ### Patch Changes
