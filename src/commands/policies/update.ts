@@ -173,6 +173,8 @@ export default defineCommand({
         migration_safety: current.migration_safety,
         egress_bytes_per_day: current.egress_bytes_per_day,
         max_affected_rows: current.max_affected_rows,
+        content_scan_mode: current.content_scan_mode,
+        content_scan_max_bytes: current.content_scan_max_bytes,
       };
 
       if (fileBody) {

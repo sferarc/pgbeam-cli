@@ -1896,6 +1896,14 @@ export const commandManifest: GeneratedCommand[] = [
           label: "Max Affected Rows",
         },
         {
+          key: "content_scan_mode",
+          label: "Content Scan Mode",
+        },
+        {
+          key: "content_scan_max_bytes",
+          label: "Content Scan Max Bytes",
+        },
+        {
           key: "updated_at",
           label: "Updated At",
           date: true,

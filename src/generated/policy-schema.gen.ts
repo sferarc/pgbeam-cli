@@ -142,5 +142,13 @@ export const policyProfileInputSchema: PolicySchemaNode = {
       type: "integer",
       minimum: 0,
     },
+    content_scan_mode: {
+      type: "string",
+      enum: ["off", "annotate", "block"],
+    },
+    content_scan_max_bytes: {
+      type: "integer",
+      minimum: 0,
+    },
   },
 };

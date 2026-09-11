@@ -49,6 +49,8 @@ const currentProfile = {
   max_rows: 0,
   max_affected_rows: 100,
   budget_queries_per_day: 0,
+  content_scan_mode: "block",
+  content_scan_max_bytes: 65536,
 };
 
 const baseArgs = { json: false, "no-color": false, debug: false };
@@ -114,6 +116,21 @@ describe("policies update", () => {
     expect(mockUpdatePolicyProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({ max_affected_rows: 100 }),
+      }),
+    );
+  });
+
+  it("preserves the content scan settings on an edit that does not name them", async () => {
+    // The API replaces the whole profile and defaults anything omitted, so a
+    // body that dropped these would turn a profile set to block back to off.
+    await run({ args: { ...baseArgs, id: "pol_1", mode: "read_write" } } as never);
+
+    expect(mockUpdatePolicyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          content_scan_mode: "block",
+          content_scan_max_bytes: 65536,
+        }),
       }),
     );
   });
