@@ -1,5 +1,13 @@
 # @pgbeam/cli
 
+## 0.3.11
+
+### Patch Changes
+
+- a9c235e: feat(api): anomaly rules, the authoring surface (roadmap item 4, slice 3)
+- Updated dependencies [a9c235e]
+  - pgbeam@0.4.17
+
 ## 0.3.10
 
 ### Patch Changes
