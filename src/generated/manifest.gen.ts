@@ -510,6 +510,402 @@ export const commandManifest: GeneratedCommand[] = [
     },
   },
   {
+    command: ["anomalies", "rules", "create"],
+    aliases: ["add"],
+    operationId: "createAnomalyRule",
+    route: "POST /v1/projects/{project_id}/anomaly-rules",
+    method: "POST",
+    path: "/v1/projects/{project_id}/anomaly-rules",
+    summary: "Create an anomaly rule",
+    description:
+      "Retunes one detection metric for this project, or for one agent credential\nin it. Without a rule every metric resolves to the deployment default.\n\nA rule adds no detection algorithm and no alert kind: it changes how\nsensitive one of the five existing metrics is. enabled=false silences that\nmetric for that scope; the baseline keeps advancing, so re-enabling\nresumes from the existing history rather than a cold warm-up.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+    ],
+    positionalName: "metric",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "credential-id",
+        type: "string",
+        required: false,
+        description:
+          "Agent credential to scope the rule to. Null or omitted applies it to every credential in the project. The credential must belong to this project.\n",
+        bodyKey: "credential_id",
+      },
+      {
+        name: "metric",
+        type: "string",
+        required: true,
+        description:
+          "One of the five detection metrics. A rule retunes how sensitive one of them is; it adds no detection algorithm and no alert kind.\n",
+        bodyKey: "metric",
+        enumValues: [
+          "queries_per_hour",
+          "bytes_per_hour",
+          "distinct_shapes",
+          "errors_per_hour",
+          "active_hours",
+        ],
+      },
+      {
+        name: "sigma-threshold",
+        type: "number",
+        required: false,
+        description:
+          'N in the "mean + N * dispersion" spike rule. Must be greater than zero; the detector reads any value at or below zero as "use the default", so a stored zero could never mean what setting it would suggest. Rejected for distinct_shapes and active_hours, which have no rate for sigma to put a threshold on. Null or omitted leaves the deployment default in place.\n',
+        bodyKey: "sigma_threshold",
+      },
+      {
+        name: "floor",
+        type: "number",
+        required: false,
+        description:
+          "Absolute floor below which the metric never alerts. Must be greater than zero, for the same reason as sigma_threshold. Rejected for distinct_shapes and active_hours, which have no rate for a floor to bound. Null or omitted leaves the deployment default in place.\n",
+        bodyKey: "floor",
+      },
+      {
+        name: "enabled",
+        type: "boolean",
+        required: false,
+        description:
+          "False silences this metric for this scope. The baseline keeps advancing while it is silenced, so re-enabling resumes from the existing history rather than a cold warm-up.\n",
+        bodyKey: "enabled",
+      },
+    ],
+    hasBody: true,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "credential_id",
+          label: "Credential ID",
+        },
+        {
+          key: "metric",
+          label: "Metric",
+        },
+        {
+          key: "sigma_threshold",
+          label: "Sigma Threshold",
+        },
+        {
+          key: "floor",
+          label: "Floor",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
+    command: ["anomalies", "rules", "delete"],
+    aliases: ["rm"],
+    operationId: "deleteAnomalyRule",
+    route: "DELETE /v1/projects/{project_id}/anomaly-rules/{anomaly_rule_id}",
+    method: "DELETE",
+    path: "/v1/projects/{project_id}/anomaly-rules/{anomaly_rule_id}",
+    summary: "Delete an anomaly rule",
+    description:
+      "Removes the rule, so its metric returns to the deployment default for that\nscope. Deleting a rule that was silencing a metric turns that metric's\nalerts back on.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "anomaly_rule_id",
+        source: "positional",
+        description: "Unique anomaly rule identifier (prefixed, e.g. anr_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: true,
+    output: {
+      kind: "message",
+    },
+  },
+  {
+    command: ["anomalies", "rules", "list"],
+    aliases: ["ls"],
+    operationId: "listAnomalyRules",
+    route: "GET /v1/projects/{project_id}/anomaly-rules",
+    method: "GET",
+    path: "/v1/projects/{project_id}/anomaly-rules",
+    summary: "List anomaly rules",
+    description: "Lists the project's anomaly rules, including silenced ones.",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+    ],
+    positionalName: null,
+    positionalRequired: false,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: true,
+    destructive: false,
+    output: {
+      kind: "list",
+      listField: "anomaly_rules",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "metric",
+          label: "Metric",
+        },
+        {
+          key: "credential_id",
+          label: "Credential ID",
+        },
+        {
+          key: "sigma_threshold",
+          label: "Sigma Threshold",
+        },
+        {
+          key: "floor",
+          label: "Floor",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+      ],
+    },
+  },
+  {
+    command: ["anomalies", "rules", "show"],
+    aliases: ["inspect"],
+    operationId: "getAnomalyRule",
+    route: "GET /v1/projects/{project_id}/anomaly-rules/{anomaly_rule_id}",
+    method: "GET",
+    path: "/v1/projects/{project_id}/anomaly-rules/{anomaly_rule_id}",
+    summary: "Get an anomaly rule",
+    description: "Returns a single anomaly rule by ID.",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "anomaly_rule_id",
+        source: "positional",
+        description: "Unique anomaly rule identifier (prefixed, e.g. anr_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "credential_id",
+          label: "Credential ID",
+        },
+        {
+          key: "metric",
+          label: "Metric",
+        },
+        {
+          key: "sigma_threshold",
+          label: "Sigma Threshold",
+        },
+        {
+          key: "floor",
+          label: "Floor",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
+    command: ["anomalies", "rules", "update"],
+    aliases: [],
+    operationId: "updateAnomalyRule",
+    route: "PUT /v1/projects/{project_id}/anomaly-rules/{anomaly_rule_id}",
+    method: "PUT",
+    path: "/v1/projects/{project_id}/anomaly-rules/{anomaly_rule_id}",
+    summary: "Update an anomaly rule",
+    description:
+      "Replaces the rule's scope, metric and sensitivity. A rule whose enabled\nflag is turned off silences its metric for its scope rather than being\ndeactivated.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "anomaly_rule_id",
+        source: "positional",
+        description: "Unique anomaly rule identifier (prefixed, e.g. anr_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "credential-id",
+        type: "string",
+        required: false,
+        description:
+          "Agent credential to scope the rule to. Null or omitted applies it to every credential in the project. The credential must belong to this project.\n",
+        bodyKey: "credential_id",
+      },
+      {
+        name: "metric",
+        type: "string",
+        required: true,
+        description:
+          "One of the five detection metrics. A rule retunes how sensitive one of them is; it adds no detection algorithm and no alert kind.\n",
+        bodyKey: "metric",
+        enumValues: [
+          "queries_per_hour",
+          "bytes_per_hour",
+          "distinct_shapes",
+          "errors_per_hour",
+          "active_hours",
+        ],
+      },
+      {
+        name: "sigma-threshold",
+        type: "number",
+        required: false,
+        description:
+          'N in the "mean + N * dispersion" spike rule. Must be greater than zero; the detector reads any value at or below zero as "use the default", so a stored zero could never mean what setting it would suggest. Rejected for distinct_shapes and active_hours, which have no rate for sigma to put a threshold on. Null or omitted leaves the deployment default in place.\n',
+        bodyKey: "sigma_threshold",
+      },
+      {
+        name: "floor",
+        type: "number",
+        required: false,
+        description:
+          "Absolute floor below which the metric never alerts. Must be greater than zero, for the same reason as sigma_threshold. Rejected for distinct_shapes and active_hours, which have no rate for a floor to bound. Null or omitted leaves the deployment default in place.\n",
+        bodyKey: "floor",
+      },
+      {
+        name: "enabled",
+        type: "boolean",
+        required: false,
+        description:
+          "False silences this metric for this scope. The baseline keeps advancing while it is silenced, so re-enabling resumes from the existing history rather than a cold warm-up.\n",
+        bodyKey: "enabled",
+      },
+    ],
+    hasBody: true,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "credential_id",
+          label: "Credential ID",
+        },
+        {
+          key: "metric",
+          label: "Metric",
+        },
+        {
+          key: "sigma_threshold",
+          label: "Sigma Threshold",
+        },
+        {
+          key: "floor",
+          label: "Floor",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
     command: ["audit", "verify"],
     aliases: [],
     operationId: "verifyAuditChain",

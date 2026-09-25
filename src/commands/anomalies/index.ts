@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 export default defineCommand({
   meta: {
     name: "anomalies",
-    description: "Review anomaly-detection alerts",
+    description: "Review anomaly-detection alerts and tune what raises them",
   },
   subCommands: {
     list: () => import("./list.js").then((m) => m.default),
@@ -11,5 +11,6 @@ export default defineCommand({
     ack: () => import("./ack.js").then((m) => m.default),
     acknowledge: () => import("./ack.js").then((m) => m.default),
     resolve: () => import("./resolve.js").then((m) => m.default),
+    rules: () => import("./rules.js").then((m) => m.default),
   },
 });
