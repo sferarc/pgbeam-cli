@@ -1,5 +1,12 @@
 # @pgbeam/cli
 
+## 0.3.12
+
+### Patch Changes
+
+- Updated dependencies [16ed7f3]
+  - pgbeam@0.4.18
+
 ## 0.3.11
 
 ### Patch Changes
