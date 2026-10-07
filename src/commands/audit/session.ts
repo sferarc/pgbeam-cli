@@ -11,6 +11,11 @@ function tableList(names: string[]): string {
   return names.length > 0 ? names.join(", ") : "-";
 }
 
+/** One alert on one line: when, how bad, what kind, and where triage stands. */
+function alertLine(a: { created_at: string; severity: string; kind: string; status: string }) {
+  return `  ${formatDate(a.created_at)}  ${a.severity}  ${a.kind}  (${a.status})`;
+}
+
 export default defineCommand({
   meta: {
     name: "session",
@@ -31,7 +36,7 @@ export default defineCommand({
         },
       ],
       response:
-        "Prints the session window, credentials and sources, the allowed/blocked/masked/truncated statement counts, rows and bytes returned, and the tables read, written, and blocked.",
+        "Prints the session window, credentials and sources, the allowed/blocked/masked/truncated statement counts, rows and bytes returned, and the tables read, written, and blocked. When your role holds anomaly:read it also lists the alerts raised from the session's own entries, and separately the rate and shape alerts on its credentials whose window overlaps the session, which are not attributed to the session itself.",
     },
   },
   args: {
@@ -81,6 +86,31 @@ export default defineCommand({
         consola.log(`Read:        ${tableList(summary.tables_read)}`);
         consola.log(`Written:     ${tableList(summary.tables_written)}`);
         consola.log(`Blocked:     ${tableList(summary.tables_blocked)}`);
+        consola.log("");
+
+        // Absent means withheld, not none: the caller's role lacks anomaly:read.
+        const anomalies = summary.anomalies;
+        if (!anomalies) {
+          consola.log("Alerts:      not shown (your role does not hold anomaly:read)");
+        } else {
+          consola.log(`Alerts raised from this session: ${anomalies.session_alerts.length}`);
+          for (const a of anomalies.session_alerts) consola.log(alertLine(a));
+          consola.log(
+            `Rate and shape alerts on its credentials in this window: ${anomalies.credential_window_alerts.length}`,
+          );
+          for (const a of anomalies.credential_window_alerts) consola.log(alertLine(a));
+          // Alert dedup is per credential, so a repeat hit raises nothing new.
+          // Point at the entries that are complete rather than let zero read as
+          // a clean session.
+          consola.log(
+            "Alerts are deduplicated per credential, so a repeat hit raises no new alert. The session's canary_tripped and content_flagged audit entries are the complete record.",
+          );
+          if (anomalies.truncated) {
+            consola.warn(
+              "More alerts exist than one summary lists. Read the rest with `pgbeam anomalies list`.",
+            );
+          }
+        }
 
         // Both of these mean the table lists above are incomplete, so say it
         // rather than let a short list read as a quiet session.

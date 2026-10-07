@@ -126,6 +126,43 @@ describe("audit session", () => {
     expect(vi.mocked(consola.warn).mock.calls[1][0]).toContain("more entries than one summary");
   });
 
+  it("says alerts are withheld when the summary carries none", async () => {
+    await run({ args: { ...baseArgs, "session-id": "0000a41f" } } as never);
+
+    expect(printed()).toContain("not shown (your role does not hold anomaly:read)");
+  });
+
+  it("lists session alerts apart from credential window alerts", async () => {
+    const alert = {
+      id: "ano_1",
+      project_id: "prj_1",
+      kind: "honeytoken_access",
+      severity: "critical",
+      title: "t",
+      status: "open",
+      created_at: "2026-08-26T09:01:00Z",
+    };
+    mockGetAuditSessionSummary.mockResolvedValue({
+      ...SUMMARY,
+      anomalies: {
+        session_alerts: [alert],
+        credential_window_alerts: [],
+        truncated: true,
+      },
+    });
+
+    await run({ args: { ...baseArgs, "session-id": "0000a41f" } } as never);
+
+    const out = printed();
+    expect(out).toContain("Alerts raised from this session: 1");
+    expect(out).toContain("critical  honeytoken_access  (open)");
+    expect(out).toContain("Rate and shape alerts on its credentials in this window: 0");
+    expect(out).toContain("complete record");
+    expect(out).not.toContain("not shown");
+    expect(consola.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(consola.warn).mock.calls[0][0]).toContain("pgbeam anomalies list");
+  });
+
   it("rejects a missing session ID", async () => {
     await expect(run({ args: { ...baseArgs } } as never)).rejects.toThrow(/session-id/);
     expect(mockGetAuditSessionSummary).not.toHaveBeenCalled();
