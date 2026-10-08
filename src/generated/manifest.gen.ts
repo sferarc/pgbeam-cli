@@ -906,6 +906,400 @@ export const commandManifest: GeneratedCommand[] = [
     },
   },
   {
+    command: ["approvals", "rules", "create"],
+    aliases: ["add"],
+    operationId: "createApprovalRule",
+    route: "POST /v1/projects/{project_id}/approval-rules",
+    method: "POST",
+    path: "/v1/projects/{project_id}/approval-rules",
+    summary: "Create an approval rule",
+    description:
+      "Sends the agent statements the rule matches to a human for approval,\nwhatever the policy profile's approval_mode says. A rule can only add\napproval; nothing here can exempt a statement from approval_mode.\n\nThe rule is pushed to connected data planes when it is written. A\nreviewer sees its name on every approval request it holds.\n\nReturns 409 for an enabled rule while the organization has a live\nself-hosted data plane enrollment, because PgBeam cannot yet confirm\nthat a self-hosted proxy runs a build that enforces approval rules. A\nrule with enabled set to false is still accepted.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+    ],
+    positionalName: "name",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "name",
+        type: "string",
+        required: true,
+        description:
+          "Label shown to the reviewer on every approval request this rule holds. Must be unique within the project and not blank.\n",
+        bodyKey: "name",
+      },
+      {
+        name: "statement-kinds",
+        type: "string[]",
+        required: false,
+        description: "Statement kinds the rule holds. Empty or omitted holds every kind.",
+        bodyKey: "statement_kinds",
+        enumValues: ["insert", "update", "delete", "ddl"],
+      },
+      {
+        name: "schema-name",
+        type: "string",
+        required: false,
+        description: "Schema to scope the rule to. Null, empty or omitted matches every schema.",
+        bodyKey: "schema_name",
+      },
+      {
+        name: "relation-name",
+        type: "string",
+        required: false,
+        description:
+          "Relation to scope the rule to. Null, empty or omitted matches every relation. Without a schema it matches that name in every schema.\n",
+        bodyKey: "relation_name",
+      },
+      {
+        name: "min-affected-rows",
+        type: "number",
+        required: false,
+        description:
+          "Hold only statements affecting at least this many rows. Must be at least 1. Null or omitted holds every matching statement. The count is taken in a rolled-back trial run; a statement that reports no count (DDL, a batch, a data-modifying CTE) is held regardless.\n",
+        bodyKey: "min_affected_rows",
+      },
+      {
+        name: "enabled",
+        type: "boolean",
+        required: false,
+        description: "False switches the rule off, so it holds nothing.",
+        bodyKey: "enabled",
+      },
+    ],
+    hasBody: true,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "schema_name",
+          label: "Schema Name",
+        },
+        {
+          key: "relation_name",
+          label: "Relation Name",
+        },
+        {
+          key: "min_affected_rows",
+          label: "Min Affected Rows",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
+    command: ["approvals", "rules", "delete"],
+    aliases: ["rm"],
+    operationId: "deleteApprovalRule",
+    route: "DELETE /v1/projects/{project_id}/approval-rules/{approval_rule_id}",
+    method: "DELETE",
+    path: "/v1/projects/{project_id}/approval-rules/{approval_rule_id}",
+    summary: "Delete an approval rule",
+    description:
+      "Removes the rule, so the statements it matched are held only if the\npolicy profile's approval_mode holds them. Approval requests it already\nheld are not affected.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "approval_rule_id",
+        source: "positional",
+        description: "Unique approval rule identifier (prefixed, e.g. apl_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: true,
+    output: {
+      kind: "message",
+    },
+  },
+  {
+    command: ["approvals", "rules", "list"],
+    aliases: ["ls"],
+    operationId: "listApprovalRules",
+    route: "GET /v1/projects/{project_id}/approval-rules",
+    method: "GET",
+    path: "/v1/projects/{project_id}/approval-rules",
+    summary: "List approval rules",
+    description: "Lists the project's approval rules, including disabled ones.",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+    ],
+    positionalName: null,
+    positionalRequired: false,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: true,
+    destructive: false,
+    output: {
+      kind: "list",
+      listField: "approval_rules",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "schema_name",
+          label: "Schema Name",
+        },
+        {
+          key: "relation_name",
+          label: "Relation Name",
+        },
+        {
+          key: "min_affected_rows",
+          label: "Min Affected Rows",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+      ],
+    },
+  },
+  {
+    command: ["approvals", "rules", "show"],
+    aliases: ["inspect"],
+    operationId: "getApprovalRule",
+    route: "GET /v1/projects/{project_id}/approval-rules/{approval_rule_id}",
+    method: "GET",
+    path: "/v1/projects/{project_id}/approval-rules/{approval_rule_id}",
+    summary: "Get an approval rule",
+    description: "Returns a single approval rule by ID.",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "approval_rule_id",
+        source: "positional",
+        description: "Unique approval rule identifier (prefixed, e.g. apl_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "schema_name",
+          label: "Schema Name",
+        },
+        {
+          key: "relation_name",
+          label: "Relation Name",
+        },
+        {
+          key: "min_affected_rows",
+          label: "Min Affected Rows",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
+    command: ["approvals", "rules", "update"],
+    aliases: [],
+    operationId: "updateApprovalRule",
+    route: "PUT /v1/projects/{project_id}/approval-rules/{approval_rule_id}",
+    method: "PUT",
+    path: "/v1/projects/{project_id}/approval-rules/{approval_rule_id}",
+    summary: "Update an approval rule",
+    description:
+      "Replaces the rule's name, statement kinds, scope, row threshold and\nenabled flag. An approval request already held keeps the name it was\nheld under.\n\nReturns 409 when the update leaves the rule enabled while the\norganization has a live self-hosted data plane enrollment, for the same\nreason as create. Setting enabled to false is still accepted.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "approval_rule_id",
+        source: "positional",
+        description: "Unique approval rule identifier (prefixed, e.g. apl_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [
+      {
+        name: "name",
+        type: "string",
+        required: true,
+        description:
+          "Label shown to the reviewer on every approval request this rule holds. Must be unique within the project and not blank.\n",
+        bodyKey: "name",
+      },
+      {
+        name: "statement-kinds",
+        type: "string[]",
+        required: false,
+        description: "Statement kinds the rule holds. Empty or omitted holds every kind.",
+        bodyKey: "statement_kinds",
+        enumValues: ["insert", "update", "delete", "ddl"],
+      },
+      {
+        name: "schema-name",
+        type: "string",
+        required: false,
+        description: "Schema to scope the rule to. Null, empty or omitted matches every schema.",
+        bodyKey: "schema_name",
+      },
+      {
+        name: "relation-name",
+        type: "string",
+        required: false,
+        description:
+          "Relation to scope the rule to. Null, empty or omitted matches every relation. Without a schema it matches that name in every schema.\n",
+        bodyKey: "relation_name",
+      },
+      {
+        name: "min-affected-rows",
+        type: "number",
+        required: false,
+        description:
+          "Hold only statements affecting at least this many rows. Must be at least 1. Null or omitted holds every matching statement. The count is taken in a rolled-back trial run; a statement that reports no count (DDL, a batch, a data-modifying CTE) is held regardless.\n",
+        bodyKey: "min_affected_rows",
+      },
+      {
+        name: "enabled",
+        type: "boolean",
+        required: false,
+        description: "False switches the rule off, so it holds nothing.",
+        bodyKey: "enabled",
+      },
+    ],
+    hasBody: true,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "schema_name",
+          label: "Schema Name",
+        },
+        {
+          key: "relation_name",
+          label: "Relation Name",
+        },
+        {
+          key: "min_affected_rows",
+          label: "Min Affected Rows",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
     command: ["audit", "verify"],
     aliases: [],
     operationId: "verifyAuditChain",

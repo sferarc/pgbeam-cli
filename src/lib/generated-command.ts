@@ -203,11 +203,19 @@ function coerceFlag(
     }
     case "number":
       return parseNumber(String(raw), flag.name);
-    case "string[]":
-      return String(raw)
+    case "string[]": {
+      const values = String(raw)
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
+      const bad = flag.enumValues ? values.find((v) => !flag.enumValues?.includes(v)) : undefined;
+      if (bad !== undefined) {
+        throw new Error(
+          `Invalid --${flag.name}: "${bad}". Allowed: ${flag.enumValues?.join(", ")}.`,
+        );
+      }
+      return values;
+    }
     default: {
       const value = String(raw);
       if (flag.enumValues && !flag.enumValues.includes(value)) {
