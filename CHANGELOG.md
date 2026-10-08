@@ -1,5 +1,13 @@
 # @pgbeam/cli
 
+## 0.3.15
+
+### Patch Changes
+
+- 14df323: Approval rules can be authored: five operations under `/v1/projects/{project_id}/approval-rules` and `pgbeam approvals rules {list,create,show,update,delete}`.
+- Updated dependencies [14df323]
+  - pgbeam@0.4.21
+
 ## 0.3.14
 
 ### Patch Changes
