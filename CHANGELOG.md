@@ -1,5 +1,16 @@
 # @pgbeam/cli
 
+## 0.3.14
+
+### Patch Changes
+
+- 9d6807d: The audit session summary carries `anomalies`: the alerts raised from the session's own entries, and separately the rate and shape alerts on its credentials whose window overlaps it. The field is absent when the caller's role does not hold `anomaly:read`. `pgbeam audit session` prints both lists.
+- d92dcdb: Reword five API descriptions that carried em dashes into every generated reference.
+- Updated dependencies [eb77c5f]
+- Updated dependencies [9d6807d]
+- Updated dependencies [d92dcdb]
+  - pgbeam@0.4.20
+
 ## 0.3.13
 
 ### Patch Changes
