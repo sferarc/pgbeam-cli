@@ -1,8 +1,10 @@
-import { chmodSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import { consola } from "consola";
+import { ConfirmationDeclinedError, confirmDestructive } from "../lib/confirm.js";
 import { VERSION } from "../lib/constants.js";
 import { globalArgs } from "../lib/flags.js";
 import { isNewer, parseSemver } from "../lib/semver.js";
@@ -16,7 +18,11 @@ const S3_LATEST_URL = `${S3_BASE}/latest/version.txt`;
 const GITHUB_RELEASES_URL = "https://api.github.com/repos/sferarc/pgbeam-cli/releases";
 /** Release tags on the CLI repository are `vX.Y.Z`, matching the npm version. */
 const RELEASE_TAG = /^v(\d+\.\d+\.\d+.*)$/;
+/** Each stable release carries `SHA256SUMS` (sha256sum output) over the S3 binaries. */
+const GITHUB_DOWNLOAD_BASE = "https://github.com/sferarc/pgbeam-cli/releases/download";
 const INSTALL_SCRIPT_URL = "https://pgbeam.com/install";
+const METADATA_TIMEOUT_MS = 15_000;
+const DOWNLOAD_TIMEOUT_MS = 300_000;
 const IS_WINDOWS = process.platform === "win32";
 
 /** The recognised update channels. */
@@ -26,7 +32,9 @@ type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
 /** Fetch the latest version from S3 or GitHub. */
 async function fetchLatestVersion(): Promise<string | null> {
   try {
-    const s3Response = await fetch(S3_LATEST_URL);
+    const s3Response = await fetch(S3_LATEST_URL, {
+      signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+    });
     if (s3Response.ok) {
       const text = await s3Response.text();
       const version = text.trim().replace(/^v/, "");
@@ -39,6 +47,7 @@ async function fetchLatestVersion(): Promise<string | null> {
   try {
     const ghResponse = await fetch(GITHUB_RELEASES_URL, {
       headers: { Accept: "application/vnd.github+json" },
+      signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
     });
     if (ghResponse.ok) {
       const releases: unknown = await ghResponse.json();
@@ -64,7 +73,7 @@ async function fetchLatestVersion(): Promise<string | null> {
 }
 
 /** Detect the platform asset name. */
-function detectAsset(): string {
+export function detectAsset(): string {
   const os =
     process.platform === "darwin" ? "darwin" : process.platform === "win32" ? "windows" : "linux";
   const arch = process.arch === "arm64" ? "arm64" : "x64";
@@ -72,50 +81,169 @@ function detectAsset(): string {
   return `pgbeam-${os}-${arch}${ext}`;
 }
 
-/** Download a file from a URL. Returns the response body as an ArrayBuffer. */
-async function downloadBinary(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Download failed: ${res.status} ${res.statusText}`);
+/** The download could not be verified against the published checksums. */
+export class IntegrityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IntegrityError";
   }
-  return res.arrayBuffer();
+}
+
+/** The directory holding the current binary is not writable by this user. */
+export class InstallPermissionError extends Error {
+  constructor(target: string) {
+    super(
+      `Cannot replace ${target}: permission denied. Re-run with sudo, or reinstall with: curl -fsSL ${INSTALL_SCRIPT_URL} | sh`,
+    );
+    this.name = "InstallPermissionError";
+  }
+}
+
+function errorCode(err: unknown): string | undefined {
+  return err && typeof err === "object" && "code" in err ? String(err.code) : undefined;
+}
+
+function isPermissionError(err: unknown): boolean {
+  const code = errorCode(err);
+  return code === "EACCES" || code === "EPERM" || code === "EROFS";
+}
+
+function removeQuietly(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    // Already gone, or locked on Windows until the next update.
+  }
+}
+
+/** Fetch the expected sha256 of `asset` from the release's SHA256SUMS. */
+export async function fetchExpectedChecksum(version: string, asset: string): Promise<string> {
+  const url = `${GITHUB_DOWNLOAD_BASE}/v${version}/SHA256SUMS`;
+  let text: string;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(METADATA_TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    text = await res.text();
+  } catch (err) {
+    throw new IntegrityError(
+      `Could not fetch checksums from ${url} (${err instanceof Error ? err.message : err}). Refusing to install an unverified binary.`,
+    );
+  }
+  for (const line of text.split("\n")) {
+    const match = /^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$/.exec(line);
+    if (match && match[2] === asset) return match[1].toLowerCase();
+  }
+  throw new IntegrityError(
+    `SHA256SUMS for v${version} has no entry for ${asset}. Refusing to install an unverified binary.`,
+  );
+}
+
+function sha256(data: Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
+}
+
+/** Move a file, copying when source and destination are on different filesystems. */
+export function moveFile(src: string, dest: string): void {
+  try {
+    renameSync(src, dest);
+    return;
+  } catch (err) {
+    if (errorCode(err) !== "EXDEV") throw err;
+  }
+  const staged = `${dest}.pgbeam-update`;
+  try {
+    copyFileSync(src, staged);
+    renameSync(staged, dest);
+  } catch (err) {
+    removeQuietly(staged);
+    throw err;
+  }
+  removeQuietly(src);
+}
+
+/**
+ * Write the new binary next to `target` so the final rename stays on one
+ * filesystem; fall back to tmpdir when that directory refuses the write.
+ */
+function stageBinary(data: Uint8Array, target: string): string {
+  const name = `.pgbeam-update-${process.pid}-${Date.now()}${IS_WINDOWS ? ".exe" : ""}`;
+  const besideTarget = join(dirname(target), name);
+  try {
+    writeFileSync(besideTarget, data, { mode: 0o755 });
+    return besideTarget;
+  } catch (err) {
+    if (!isPermissionError(err)) throw err;
+  }
+  const inTmp = join(tmpdir(), name);
+  writeFileSync(inTmp, data, { mode: 0o755 });
+  return inTmp;
+}
+
+function replaceBinary(staged: string, target: string): void {
+  if (!IS_WINDOWS) {
+    moveFile(staged, target);
+    return;
+  }
+  // A running .exe cannot be overwritten, but it can be renamed out of the way.
+  const oldBin = join(dirname(target), `pgbeam-old-${Date.now()}.exe`);
+  renameSync(target, oldBin);
+  try {
+    moveFile(staged, target);
+  } catch (err) {
+    renameSync(oldBin, target);
+    throw err;
+  }
+  removeQuietly(oldBin);
+}
+
+interface InstallOptions {
+  /** Stable release version whose SHA256SUMS must match the download. Omit for dev builds. */
+  verifyVersion?: string;
+  /** Defaults to the running binary. */
+  target?: string;
 }
 
 /** Install a binary by downloading it directly from S3. */
-async function installFromS3(s3Path: string): Promise<void> {
+export async function installFromS3(s3Path: string, opts: InstallOptions = {}): Promise<void> {
   const asset = detectAsset();
   const url = `${S3_BASE}/${s3Path}/${asset}`;
+  const target = opts.target ?? process.execPath;
+
+  const expected =
+    opts.verifyVersion === undefined
+      ? undefined
+      : await fetchExpectedChecksum(opts.verifyVersion, asset);
 
   consola.start(`Downloading ${url}...`);
-  const data = await downloadBinary(url);
-
-  const ext = IS_WINDOWS ? ".exe" : "";
-  const tmpFile = join(tmpdir(), `pgbeam-update-${Date.now()}${ext}`);
-  writeFileSync(tmpFile, Buffer.from(data));
-
-  if (!IS_WINDOWS) {
-    chmodSync(tmpFile, 0o755);
+  const res = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+  if (!res.ok) {
+    throw new Error(`Download failed: ${res.status} ${res.statusText}`);
   }
+  const data = new Uint8Array(await res.arrayBuffer());
 
-  const currentBin = process.execPath;
-
-  if (IS_WINDOWS) {
-    // On Windows, a running .exe can't be overwritten directly.
-    // Rename current binary out of the way, move the new one in, then clean up.
-    const dir = dirname(currentBin);
-    const oldBin = join(dir, `pgbeam-old-${Date.now()}.exe`);
-    renameSync(currentBin, oldBin);
-    renameSync(tmpFile, currentBin);
-    try {
-      unlinkSync(oldBin);
-    } catch {
-      // Old binary may still be locked; it will be cleaned up on next update
+  if (expected !== undefined) {
+    const actual = sha256(data);
+    if (actual !== expected) {
+      throw new IntegrityError(
+        `Checksum mismatch for ${asset}: expected ${expected}, got ${actual}. The download was discarded.`,
+      );
     }
-  } else {
-    renameSync(tmpFile, currentBin);
+    consola.success("Checksum verified against SHA256SUMS.");
   }
 
-  consola.success(`Installed to ${currentBin}`);
+  let staged: string | undefined;
+  try {
+    staged = stageBinary(data, target);
+    replaceBinary(staged, target);
+    staged = undefined;
+  } catch (err) {
+    if (isPermissionError(err)) throw new InstallPermissionError(target);
+    throw err;
+  } finally {
+    if (staged !== undefined) removeQuietly(staged);
+  }
+
+  consola.success(`Installed to ${target}`);
 }
 
 export default defineCommand({
@@ -125,7 +253,7 @@ export default defineCommand({
     icon: "RefreshCw",
     docs: {
       longDescription:
-        "Check for and install CLI updates. By default, checks the latest stable release and prompts before updating. Use `--channel dev` with `--version` to install development builds (e.g. PR preview builds). The binary is downloaded from S3 and replaces the current installation in-place.",
+        "Check for and install CLI updates. By default, checks the latest stable release and prompts before updating. Use `--channel dev` with `--version` to install development builds (e.g. PR preview builds). The binary is downloaded from S3, checked against the release's SHA256SUMS (dev builds are unverified and need confirmation), and replaces the current installation in-place.",
       examples: [
         { comment: "Check for updates and install if available", command: "pgbeam update" },
         { comment: "Update without confirmation prompt", command: "pgbeam update --yes" },
@@ -178,16 +306,21 @@ export default defineCommand({
       consola.info(`Current version: ${VERSION}`);
       consola.info(`Installing dev build: ${args.version}`);
 
-      if (!args.yes) {
-        const { confirm } = await import("@inquirer/prompts");
-        const proceed = await confirm({
-          message: `Install dev build ${args.version}?`,
-          default: true,
+      consola.warn("Dev builds have no published checksums, so this download cannot be verified.");
+
+      try {
+        await confirmDestructive({
+          yes: Boolean(args.yes),
+          message: `Install unverified dev build ${args.version}?`,
+          action: "Installing an unverified dev build",
         });
-        if (!proceed) {
+      } catch (err) {
+        if (err instanceof ConfirmationDeclinedError) {
           consola.info("Update cancelled.");
           return;
         }
+        consola.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
       }
 
       try {
@@ -239,8 +372,13 @@ export default defineCommand({
     }
 
     try {
-      await installFromS3(`v${targetVersion}`);
-    } catch {
+      await installFromS3(`v${targetVersion}`, { verifyVersion: targetVersion });
+    } catch (err) {
+      // The install script does not verify checksums, so it is no fallback here.
+      if (err instanceof IntegrityError || err instanceof InstallPermissionError) {
+        consola.error(err.message);
+        process.exit(1);
+      }
       if (IS_WINDOWS) {
         consola.error("Update failed. Download manually from:");
         consola.log(`  ${S3_BASE}/v${targetVersion}/${detectAsset()}`);

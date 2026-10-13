@@ -1,277 +1,227 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-vi.mock("citty", () => ({
-  defineCommand: (config: Record<string, unknown>) => config,
-}));
-
-vi.mock("../lib/flags.js", () => ({
-  globalArgs: {},
-}));
-
-vi.mock("node:fs", () => ({
-  writeFileSync: vi.fn(),
-  chmodSync: vi.fn(),
-  renameSync: vi.fn(),
-  unlinkSync: vi.fn(),
-  readFileSync: vi.fn(() => JSON.stringify({ version: "0.1.0" })),
-}));
-
-vi.mock("node:os", () => ({
-  tmpdir: vi.fn(() => "/tmp"),
-}));
-
-vi.mock("../lib/constants.js", () => ({
-  VERSION: "0.1.0",
-}));
-
-vi.mock("@inquirer/prompts", () => ({
-  confirm: vi.fn(),
-}));
+import { createHash } from "node:crypto";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("consola", () => ({
   consola: {
-    start: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
     log: vi.fn(),
+    info: vi.fn(),
+    start: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
-const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-  throw new Error("process.exit");
-});
+vi.mock("node:fs", () => ({
+  copyFileSync: vi.fn(),
+  renameSync: vi.fn(),
+  unlinkSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
 
-// Mock global fetch
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
+vi.mock("node:os", () => ({ tmpdir: () => "/tmp" }));
 
-import { confirm } from "@inquirer/prompts";
+vi.mock("../lib/confirm.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/confirm.js")>()),
+  confirmDestructive: vi.fn(),
+}));
+
+import { copyFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { consola } from "consola";
+import { ConfirmationRequiredError, confirmDestructive } from "../lib/confirm.js";
+import updateCommand, {
+  detectAsset,
+  fetchExpectedChecksum,
+  InstallPermissionError,
+  IntegrityError,
+  installFromS3,
+  moveFile,
+} from "./update.js";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-async function runHandler(args: Record<string, unknown> = {}) {
-  const mod = await import("./update.js");
-  const command = mod.default;
-  await command.run?.({
-    args: { json: false, "no-color": false, debug: false, yes: false, channel: "latest", ...args },
-  } as never);
+const BINARY = new TextEncoder().encode("new pgbeam binary");
+const BINARY_SHA = createHash("sha256").update(BINARY).digest("hex");
+const TARGET = "/usr/local/bin/pgbeam";
+const asset = detectAsset();
+
+function fsError(code: string): Error {
+  return Object.assign(new Error(code), { code });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+function mockFetch(sums: string | null): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url.endsWith("/SHA256SUMS")) {
+      return sums === null
+        ? new Response("Not Found", { status: 404, statusText: "Not Found" })
+        : new Response(sums);
+    }
+    return new Response(BINARY);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(renameSync).mockImplementation(() => undefined);
+  vi.mocked(writeFileSync).mockImplementation(() => undefined);
 });
 
-describe("update", () => {
-  it("reports already on latest when version matches", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: () => Promise.resolve("0.1.0"),
-    });
-
-    await runHandler({ yes: true });
-
-    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining("already on the latest"));
-  });
-
-  it("exits with error on an unknown channel instead of silently updating", async () => {
-    await expect(runHandler({ channel: "stable", yes: true })).rejects.toThrow("process.exit");
-
-    expect(consola.error).toHaveBeenCalledWith(
-      expect.stringContaining('Unknown --channel "stable"'),
-    );
-    expect(mockExit).toHaveBeenCalledWith(1);
-    // It must not have reached out to check for the latest version.
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it("exits with error when dev channel has no --version", async () => {
-    await expect(runHandler({ channel: "dev", yes: true })).rejects.toThrow("process.exit");
-
-    expect(consola.error).toHaveBeenCalledWith(expect.stringContaining("--version is required"));
-    expect(mockExit).toHaveBeenCalledWith(1);
-  });
-
-  it("exits with error when version check fails", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("network"));
-    mockFetch.mockRejectedValueOnce(new Error("network"));
-
-    await expect(runHandler({ yes: true })).rejects.toThrow("process.exit");
-
-    expect(consola.error).toHaveBeenCalledWith(expect.stringContaining("Failed to check"));
-    expect(mockExit).toHaveBeenCalledWith(1);
-  });
-
-  it("fetches and installs a newer version with --yes", async () => {
-    // S3 version check
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: () => Promise.resolve("0.2.0"),
-    });
-    // S3 binary download
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: true });
-
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("0.2.0"));
-    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining("Installed"));
-  });
-
-  it("allows specifying an explicit version", async () => {
-    // S3 binary download
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: true, version: "v0.3.0" });
-
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("0.3.0"));
-  });
-
-  it("strips v prefix from explicit version", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: true, version: "v1.2.3" });
-
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("1.2.3"));
-  });
-
-  it("falls back to GitHub releases when S3 fails", async () => {
-    // S3 version check fails
-    mockFetch.mockResolvedValueOnce({ ok: false });
-    // GitHub releases succeeds
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([{ tag_name: "v0.5.0", prerelease: false }]),
-    });
-    // S3 binary download
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: true });
-
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("0.5.0"));
-  });
-
-  it("installs dev channel build with --version", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ channel: "dev", version: "pr-434", yes: true });
-
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("pr-434"));
-    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining("Installed"));
-  });
-
-  it("prompts for confirmation when --yes is not set (latest channel)", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: () => Promise.resolve("0.2.0"),
-    });
-    // User confirms
-    vi.mocked(confirm).mockResolvedValueOnce(true);
-    // Download binary
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: false });
-
-    expect(confirm).toHaveBeenCalled();
-    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining("Installed"));
-  });
-
-  it("cancels update when user declines confirmation", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: () => Promise.resolve("0.2.0"),
-    });
-    // User declines
-    vi.mocked(confirm).mockResolvedValueOnce(false);
-
-    await runHandler({ yes: false });
-
-    expect(consola.info).toHaveBeenCalledWith("Update cancelled.");
-  });
-
-  it("cancels dev channel update when user declines", async () => {
-    vi.mocked(confirm).mockResolvedValueOnce(false);
-
-    await runHandler({ channel: "dev", version: "pr-100", yes: false });
-
-    expect(consola.info).toHaveBeenCalledWith("Update cancelled.");
-  });
-
-  it("logs current and target versions", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      text: () => Promise.resolve("0.2.0"),
-    });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: true });
-
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("0.1.0"));
-    expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("0.2.0"));
-  });
-
-  it("does not skip update when explicit version matches current", async () => {
-    // When --version is set, always proceed even if same version
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-    });
-
-    await runHandler({ yes: true, version: "0.1.0" });
-
-    // Should still try to install (not exit with "already latest")
-    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining("Installed"));
-  });
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
-describe("update command metadata", () => {
-  it("has correct meta name and description", async () => {
-    const mod = await import("./update.js");
-    const command = mod.default;
-    expect((command.meta as { name: string }).name).toBe("update");
-    expect((command.meta as { description: string }).description).toBe(
-      "Update the PgBeam CLI to the latest version",
+describe("fetchExpectedChecksum", () => {
+  it("returns the digest for the matching asset", async () => {
+    mockFetch(`${"a".repeat(64)}  pgbeam-other\n${BINARY_SHA}  ${asset}\n`);
+    await expect(fetchExpectedChecksum("1.2.3", asset)).resolves.toBe(BINARY_SHA);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://github.com/sferarc/pgbeam-cli/releases/download/v1.2.3/SHA256SUMS",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
-  it("defines yes, channel, and version arguments", async () => {
-    const mod = await import("./update.js");
-    const command = mod.default;
-    const args = command.args as unknown as Record<string, { type: string; default?: unknown }>;
-    expect(args.yes).toBeDefined();
-    expect(args.yes.type).toBe("boolean");
-    expect(args.yes.default).toBe(false);
-    expect(args.channel).toBeDefined();
-    expect(args.channel.default).toBe("latest");
-    expect(args.version).toBeDefined();
-    expect(args.version.type).toBe("string");
+  it("refuses when the asset has no entry", async () => {
+    mockFetch(`${"a".repeat(64)}  pgbeam-other\n`);
+    await expect(fetchExpectedChecksum("1.2.3", asset)).rejects.toThrow(IntegrityError);
+  });
+
+  it("refuses when SHA256SUMS is missing", async () => {
+    mockFetch(null);
+    await expect(fetchExpectedChecksum("1.2.3", asset)).rejects.toThrow(/404/);
+  });
+});
+
+describe("installFromS3", () => {
+  it("installs beside the target when the checksum matches", async () => {
+    mockFetch(`${BINARY_SHA}  ${asset}\n`);
+    await installFromS3("v1.2.3", { verifyVersion: "1.2.3", target: TARGET });
+
+    const staged = vi.mocked(writeFileSync).mock.calls[0][0] as string;
+    expect(staged.startsWith("/usr/local/bin/.pgbeam-update-")).toBe(true);
+    expect(renameSync).toHaveBeenCalledWith(staged, TARGET);
+    for (const call of vi.mocked(fetch).mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    }
+  });
+
+  it("refuses a checksum mismatch without writing anything", async () => {
+    mockFetch(`${"0".repeat(64)}  ${asset}\n`);
+    await expect(
+      installFromS3("v1.2.3", { verifyVersion: "1.2.3", target: TARGET }),
+    ).rejects.toThrow(/Checksum mismatch/);
+    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(renameSync).not.toHaveBeenCalled();
+  });
+
+  it("refuses before downloading when the asset has no checksum entry", async () => {
+    const fetchMock = mockFetch(`${BINARY_SHA}  pgbeam-other\n`);
+    await expect(
+      installFromS3("v1.2.3", { verifyVersion: "1.2.3", target: TARGET }),
+    ).rejects.toThrow(IntegrityError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("removes the staged file when the final rename fails", async () => {
+    mockFetch(`${BINARY_SHA}  ${asset}\n`);
+    vi.mocked(renameSync).mockImplementation(() => {
+      throw fsError("EBUSY");
+    });
+    await expect(
+      installFromS3("v1.2.3", { verifyVersion: "1.2.3", target: TARGET }),
+    ).rejects.toThrow("EBUSY");
+    const staged = vi.mocked(writeFileSync).mock.calls[0][0];
+    expect(unlinkSync).toHaveBeenCalledWith(staged);
+  });
+
+  it("falls back to tmpdir and copies across filesystems on EXDEV", async () => {
+    mockFetch(`${BINARY_SHA}  ${asset}\n`);
+    vi.mocked(writeFileSync).mockImplementationOnce(() => {
+      throw fsError("EACCES");
+    });
+    vi.mocked(renameSync).mockImplementationOnce(() => {
+      throw fsError("EXDEV");
+    });
+    await installFromS3("v1.2.3", { verifyVersion: "1.2.3", target: TARGET });
+
+    const tmpFile = vi.mocked(writeFileSync).mock.calls[1][0] as string;
+    expect(tmpFile.startsWith("/tmp/.pgbeam-update-")).toBe(true);
+    expect(copyFileSync).toHaveBeenCalledWith(tmpFile, `${TARGET}.pgbeam-update`);
+    expect(renameSync).toHaveBeenLastCalledWith(`${TARGET}.pgbeam-update`, TARGET);
+    expect(unlinkSync).toHaveBeenCalledWith(tmpFile);
+  });
+
+  it("explains how to proceed when the install directory is not writable", async () => {
+    mockFetch(`${BINARY_SHA}  ${asset}\n`);
+    vi.mocked(writeFileSync).mockImplementationOnce(() => {
+      throw fsError("EACCES");
+    });
+    vi.mocked(renameSync).mockImplementationOnce(() => {
+      throw fsError("EXDEV");
+    });
+    vi.mocked(copyFileSync).mockImplementationOnce(() => {
+      throw fsError("EACCES");
+    });
+    const err = await installFromS3("v1.2.3", { verifyVersion: "1.2.3", target: TARGET }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(InstallPermissionError);
+    expect((err as Error).message).toMatch(/sudo.*pgbeam\.com\/install/);
+    expect(unlinkSync).toHaveBeenCalledWith(vi.mocked(writeFileSync).mock.calls[1][0]);
+  });
+});
+
+describe("moveFile", () => {
+  it("renames directly on the same filesystem", () => {
+    moveFile("/a", "/b");
+    expect(renameSync).toHaveBeenCalledWith("/a", "/b");
+    expect(copyFileSync).not.toHaveBeenCalled();
+  });
+
+  it("rethrows errors other than EXDEV", () => {
+    vi.mocked(renameSync).mockImplementationOnce(() => {
+      throw fsError("ENOENT");
+    });
+    expect(() => moveFile("/a", "/b")).toThrow("ENOENT");
+    expect(copyFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe("update --channel dev", () => {
+  const exit = vi.spyOn(process, "exit");
+
+  beforeEach(() => {
+    exit.mockImplementation((() => {
+      throw new Error("exit");
+    }) as never);
+  });
+
+  afterEach(() => {
+    exit.mockReset();
+  });
+
+  type RunContext = Parameters<NonNullable<typeof updateCommand.run>>[0];
+  const run = (args: Record<string, unknown>) => updateCommand.run?.({ args } as RunContext);
+
+  it("warns that the build is unverified and installs once confirmed", async () => {
+    const fetchMock = mockFetch(null);
+    vi.mocked(confirmDestructive).mockResolvedValue();
+    await run({ channel: "dev", version: "pr-1", yes: false });
+
+    expect(consola.warn).toHaveBeenCalledWith(expect.stringMatching(/cannot be verified/));
+    expect(confirmDestructive).toHaveBeenCalledWith(expect.objectContaining({ yes: false }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/cli\/pr-1\//);
+    expect(renameSync).toHaveBeenCalled();
+  });
+
+  it("refuses without --yes when it cannot prompt", async () => {
+    const fetchMock = mockFetch(null);
+    vi.mocked(confirmDestructive).mockRejectedValue(
+      new ConfirmationRequiredError("Installing an unverified dev build"),
+    );
+    await expect(run({ channel: "dev", version: "pr-1", yes: false })).rejects.toThrow("exit");
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
