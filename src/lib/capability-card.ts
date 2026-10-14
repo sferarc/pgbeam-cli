@@ -5,8 +5,11 @@
  * Reading those two records side by side is not enough, because the data plane
  * resolves them against each other in a fixed order and a policy field can be
  * inert. The rules encoded here are transcribed from
- * `backend/services/proxy/policy/policy.go`:
+ * `backend/services/proxy/policy/policy.go`, and the statement-kind verdicts
+ * are pinned to it by `policy/testdata/statement_kind_verdicts.json`:
  *
+ *  - COPY is refused in every access mode by a floor that runs before
+ *    statement_rules, so no allowlist entry permits it;
  *  - statement-kind deny beats allow, and a non-empty allow blocks every kind
  *    not listed;
  *  - `other` (a statement the analyzer could not classify) is refused unless it
@@ -141,6 +144,9 @@ function decideStatement(
   allow: readonly string[],
   deny: readonly string[],
 ): StatementVerdict {
+  if (kind === "copy") {
+    return { kind, allowed: false, reason: "COPY is blocked for agent credentials; use SELECT" };
+  }
   if (deny.includes(kind)) {
     return { kind, allowed: false, reason: "denied by statement_rules.deny" };
   }

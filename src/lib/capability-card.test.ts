@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildCapabilityCard,
@@ -242,7 +243,7 @@ describe("formatCapabilityCard", () => {
     const lines = formatCapabilityCard(buildCapabilityCard(credential, readOnlyPolicy, NOW), NOW);
     const blocked = lines.filter((line) => line.includes("ceiling"));
     expect(blocked).toHaveLength(1);
-    expect(blocked[0]).toContain("insert, update, delete, ddl, copy");
+    expect(blocked[0]).toContain("insert, update, delete, ddl");
   });
 
   it("lists masked columns and row filters when the policy has them", () => {
@@ -289,4 +290,47 @@ describe("formatCapabilityCard", () => {
     expect(text).toContain("[warn] write-no-allowlist:");
     expect(text).toContain("Fix:");
   });
+});
+
+interface GoldenProfile {
+  name: string;
+  access_mode?: "read_only" | "read_write";
+  allow?: string[];
+  deny?: string[];
+  verdicts: Record<string, boolean>;
+}
+
+// Written by TestStatementKindVerdictsGolden from the Go policy engine's own
+// Evaluate, so a rule changed on either side without the other fails here.
+const golden = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../../../../backend/services/proxy/policy/testdata/statement_kind_verdicts.json",
+      import.meta.url,
+    ),
+    "utf-8",
+  ),
+) as { kinds: string[]; profiles: GoldenProfile[] };
+
+describe("statement-kind verdicts match the Go policy engine", () => {
+  it("covers the same statement kinds", () => {
+    const card = buildCapabilityCard(credential, {}, NOW);
+    expect(card.access.statements.map((s) => s.kind)).toEqual(golden.kinds);
+  });
+
+  it.each(golden.profiles.map((p) => [`${p.access_mode ?? "unset"} / ${p.name}`, p] as const))(
+    "%s",
+    (_label, profile) => {
+      const card = buildCapabilityCard(
+        credential,
+        {
+          access_mode: profile.access_mode,
+          statement_rules: { allow: profile.allow ?? [], deny: profile.deny ?? [] },
+        },
+        NOW,
+      );
+      const actual = Object.fromEntries(card.access.statements.map((s) => [s.kind, s.allowed]));
+      expect(actual).toEqual(profile.verdicts);
+    },
+  );
 });
