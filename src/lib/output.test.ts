@@ -11,7 +11,7 @@ vi.mock("consola", () => ({
 }));
 
 import { consola } from "consola";
-import { formatDate, output, outputJson, outputTable } from "./output";
+import { formatDate, output, outputJson, outputTable, sanitizeForTerminal } from "./output";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -243,5 +243,73 @@ describe("formatDate", () => {
 
   it("passes unparseable values through unchanged", () => {
     expect(formatDate("not-a-date", now)).toBe("not-a-date");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Terminal control sequences in API values
+// ---------------------------------------------------------------------------
+describe("terminal control sequences", () => {
+  // ESC, BEL, CR, CSI (0x9b) and DEL: each can move the cursor, rewrite a line
+  // or open a hyperlink when written raw to a terminal.
+  const hostile = "a\x1b[2Jb\x07c\rd\x9b1Ae\x7ff";
+  const neutralised = "a\\x1b[2Jb\\x07c\\x0dd\\x9b1Ae\\x7ff";
+  const logged = () => vi.mocked(consola.log).mock.calls.map((c) => String(c[0]));
+  const hasControl = (s: string) =>
+    [...s].some((ch) => {
+      const code = ch.charCodeAt(0);
+      return (code < 0x20 && code !== 0x09) || (code >= 0x7f && code <= 0x9f);
+    });
+
+  it("escapes C0 controls, DEL and C1 controls", () => {
+    expect(sanitizeForTerminal(hostile)).toBe(neutralised);
+    expect(sanitizeForTerminal("\x1b]8;;https://evil\x07x")).toBe("\\x1b]8;;https://evil\\x07x");
+  });
+
+  it("keeps tab and ordinary Unicode", () => {
+    const text = "col\tcafé naïve 🚀 数据库 Ωmega";
+    expect(sanitizeForTerminal(text)).toBe(text);
+  });
+
+  it("neutralises control characters in a table cell", () => {
+    outputTable([{ sql: hostile, name: "café 🚀" }], undefined, { truncate: false });
+
+    const lines = logged();
+    expect(lines.some(hasControl)).toBe(false);
+    expect(lines[1]).toContain(neutralised);
+    expect(lines[1]).toContain("café 🚀");
+  });
+
+  it("aligns columns on the escaped width", () => {
+    outputTable(
+      [
+        { a: "\x1b", b: "x" },
+        { a: "long", b: "y" },
+      ],
+      undefined,
+      { truncate: false },
+    );
+
+    const lines = logged();
+    // "\x1b" renders as 4 visible characters, the same as "long".
+    expect(lines[1]).toBe("\\x1b  x");
+    expect(lines[2]).toBe("long  y");
+  });
+
+  it("neutralises control characters in key/value output", () => {
+    output({ "re\x1bason": hostile, nested: { v: "\x9b2J" } }, false);
+
+    const lines = logged();
+    expect(lines.some(hasControl)).toBe(false);
+    expect(lines[0]).toContain("re\\x1bason:");
+    expect(lines[0]).toContain(neutralised);
+    expect(lines[1]).toContain("\\x9b2J");
+  });
+
+  it("leaves JSON output unchanged", () => {
+    const data = { sql: hostile };
+    output(data, true);
+
+    expect(process.stdout.write).toHaveBeenCalledWith(`${JSON.stringify(data, null, 2)}\n`);
   });
 });

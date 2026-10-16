@@ -26,11 +26,42 @@ interface ResolvedContext {
 
 type TokenSource = "flag" | "profile-flag" | "env" | "env-profile" | "profile" | "none";
 
+type OrgSource = "flag" | "profile-flag" | "env-profile" | "profile" | "none";
+
+interface ResolvedOrg {
+  orgId: string | null;
+  source: OrgSource;
+}
+
 export interface AuthState {
   token: string | null;
   source: TokenSource;
   orgId: string | null;
+  orgSource: OrgSource;
   method: string | null;
+}
+
+/**
+ * The organization every command targets: --org flag > --profile flag >
+ * PGBEAM_PROFILE env > current profile. The token source does not change this,
+ * so a --token or PGBEAM_API_KEY credential still picks up a stored profile's org.
+ */
+function resolveOrg(args: GlobalArgs): ResolvedOrg {
+  if (args.org) return { orgId: args.org, source: "flag" };
+
+  let orgId: string | null;
+  let source: OrgSource;
+  if (args.profile) {
+    orgId = getProfile(args.profile)?.orgId ?? null;
+    source = "profile-flag";
+  } else if (process.env.PGBEAM_PROFILE) {
+    orgId = getProfile(process.env.PGBEAM_PROFILE)?.orgId ?? null;
+    source = "env-profile";
+  } else {
+    orgId = getCurrentProfile()?.orgId ?? null;
+    source = "profile";
+  }
+  return orgId ? { orgId, source } : { orgId: null, source: "none" };
 }
 
 /**
@@ -40,21 +71,35 @@ export interface AuthState {
  * looking at the stored profile.
  */
 export function resolveAuthState(args: GlobalArgs): AuthState {
+  const token = resolveTokenSource(args);
+  if (!token.token) return { ...token, orgId: null, orgSource: "none" };
+  const org = resolveOrg(args);
+  return { ...token, orgId: org.orgId, orgSource: org.source };
+}
+
+/**
+ * A one-line warning when an explicit credential (--token or PGBEAM_API_KEY) is
+ * paired with an org taken from a stored profile, which may belong to a
+ * different account than the key.
+ */
+export function profileOrgWarning(auth: AuthState): string | null {
+  if (auth.source !== "flag" && auth.source !== "env") return null;
+  if (auth.orgSource === "flag" || auth.orgSource === "none") return null;
+  const credential = auth.source === "flag" ? "--token" : "PGBEAM_API_KEY";
+  return `Organization ${auth.orgId} comes from a stored profile, not from the ${credential} credential. Pass --org if the key belongs to another organization.`;
+}
+
+function resolveTokenSource(args: GlobalArgs): Omit<AuthState, "orgId" | "orgSource"> {
   // 1. --token flag
   if (args.token) {
-    return { token: args.token, source: "flag", orgId: args.org ?? null, method: "api-key" };
+    return { token: args.token, source: "flag", method: "api-key" };
   }
 
   // 2. --profile flag
   if (args.profile) {
     const profile = getProfile(args.profile);
     if (profile) {
-      return {
-        token: profile.token,
-        source: "profile-flag",
-        orgId: profile.orgId ?? null,
-        method: profile.method,
-      };
+      return { token: profile.token, source: "profile-flag", method: profile.method };
     }
     throw new Error(`Profile "${args.profile}" not found.`);
   }
@@ -62,7 +107,7 @@ export function resolveAuthState(args: GlobalArgs): AuthState {
   // 3. API-key env var (canonical PGBEAM_API_KEY, plus aliases)
   const fromEnv = envToken();
   if (fromEnv) {
-    return { token: fromEnv, source: "env", orgId: args.org ?? null, method: "api-key" };
+    return { token: fromEnv, source: "env", method: "api-key" };
   }
 
   // 4. PGBEAM_PROFILE env var
@@ -70,12 +115,7 @@ export function resolveAuthState(args: GlobalArgs): AuthState {
   if (envProfile) {
     const profile = getProfile(envProfile);
     if (profile) {
-      return {
-        token: profile.token,
-        source: "env-profile",
-        orgId: profile.orgId ?? null,
-        method: profile.method,
-      };
+      return { token: profile.token, source: "env-profile", method: profile.method };
     }
     throw new Error(`Profile "${envProfile}" (from PGBEAM_PROFILE) not found.`);
   }
@@ -83,19 +123,14 @@ export function resolveAuthState(args: GlobalArgs): AuthState {
   // 5. Current profile
   const current = getCurrentProfile();
   if (current) {
-    return {
-      token: current.token,
-      source: "profile",
-      orgId: current.orgId ?? null,
-      method: current.method,
-    };
+    return { token: current.token, source: "profile", method: current.method };
   }
 
-  return { token: null, source: "none", orgId: null, method: null };
+  return { token: null, source: "none", method: null };
 }
 
 function resolveToken(args: GlobalArgs): string | null {
-  return resolveAuthState(args).token;
+  return resolveTokenSource(args).token;
 }
 
 export function resolveContext(args: GlobalArgs): ResolvedContext {
@@ -112,18 +147,7 @@ export function resolveContext(args: GlobalArgs): ResolvedContext {
   const pgbeam = new PgBeamClient({ token, baseUrl });
   const client = pgbeam.api;
 
-  // Resolve org: --org flag > --profile flag > PGBEAM_PROFILE env > current profile
-  let orgId: string | null = args.org ?? null;
-  if (!orgId) {
-    const profileName = args.profile ?? process.env.PGBEAM_PROFILE;
-    if (profileName) {
-      const profile = getProfile(profileName);
-      orgId = profile?.orgId ?? null;
-    } else {
-      const current = getCurrentProfile();
-      orgId = current?.orgId ?? null;
-    }
-  }
+  const { orgId } = resolveOrg(args);
 
   // Resolve project: --project flag > .pgbeam/project.json
   let projectId: string | null = args.project ?? null;

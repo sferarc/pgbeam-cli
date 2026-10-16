@@ -4,7 +4,7 @@ import { buildCapabilityCard, formatCapabilityCard } from "../../lib/capability-
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
-import { output } from "../../lib/output.js";
+import { output, sanitizeForTerminal } from "../../lib/output.js";
 
 export default defineCommand({
   meta: {
@@ -55,7 +55,7 @@ export default defineCommand({
 
       output(card, args.json, () => {
         for (const line of formatCapabilityCard(card)) {
-          consola.log(line);
+          consola.log(sanitizeForTerminal(line));
         }
       });
     });

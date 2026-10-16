@@ -17,7 +17,8 @@ vi.mock("../../lib/config.js", () => ({
 }));
 
 const mockResolveAuthState = vi.fn();
-vi.mock("../../lib/client.js", () => ({
+vi.mock("../../lib/client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/client.js")>()),
   resolveAuthState: (...args: unknown[]) => mockResolveAuthState(...args),
 }));
 
@@ -39,9 +40,12 @@ vi.mock("../../lib/output.js", () => ({
 }));
 
 import { consola } from "consola";
-import { loadAuthConfig } from "../../lib/config.js";
+import { getCurrentProfile, loadAuthConfig } from "../../lib/config.js";
 import { output } from "../../lib/output.js";
 import statusCommand, { maskKey } from "./status.js";
+
+const { resolveAuthState: realResolveAuthState } =
+  await vi.importActual<typeof import("../../lib/client.js")>("../../lib/client.js");
 
 const run = statusCommand.run;
 if (!run) throw new Error("command.run is not defined");
@@ -239,5 +243,67 @@ describe("auth status", () => {
       true,
       expect.any(Function),
     );
+  });
+  describe("org resolution with an env credential", () => {
+    beforeEach(() => {
+      mockResolveAuthState.mockImplementation(realResolveAuthState);
+      process.env.PGBEAM_API_KEY = "pbo_1234567890abcdef";
+    });
+
+    afterEach(() => {
+      delete process.env.PGBEAM_API_KEY;
+    });
+
+    it("shows the stored profile's org with its source and warns", async () => {
+      vi.mocked(getCurrentProfile).mockReturnValue({
+        method: "api-key",
+        token: "pbu_other",
+        orgId: "org_A",
+      });
+      mockFetchOrganizations.mockResolvedValue([{ id: "org_A", name: "Laptop", slug: "laptop" }]);
+
+      await run({ args: { json: false, "no-color": false, debug: false } } as never);
+
+      expect(output).toHaveBeenCalledWith(
+        expect.objectContaining({ source: "env", orgId: "org_A", orgSource: "profile" }),
+        false,
+        expect.any(Function),
+      );
+      const logCalls = vi.mocked(consola.log).mock.calls.map((c) => String(c[0]));
+      expect(logCalls).toContain("Org:      Laptop (org_A), from saved profile");
+      expect(consola.warn).toHaveBeenCalledWith(expect.stringContaining("Pass --org"));
+    });
+
+    it("uses --org over the stored profile without warning", async () => {
+      vi.mocked(getCurrentProfile).mockReturnValue({
+        method: "api-key",
+        token: "pbu_other",
+        orgId: "org_A",
+      });
+      mockFetchOrganizations.mockResolvedValue([{ id: "org_B", name: "CI", slug: "ci" }]);
+
+      await run({ args: { json: true, "no-color": false, debug: false, org: "org_B" } } as never);
+
+      expect(output).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: "org_B", orgName: "CI", orgSource: "flag" }),
+        true,
+        expect.any(Function),
+      );
+      expect(consola.warn).not.toHaveBeenCalled();
+    });
+
+    it("reports no org when no profile exists", async () => {
+      vi.mocked(getCurrentProfile).mockReturnValue(null);
+      mockFetchOrganizations.mockResolvedValue([]);
+
+      await run({ args: { json: true, "no-color": false, debug: false } } as never);
+
+      expect(output).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: null, orgSource: "none" }),
+        true,
+        expect.any(Function),
+      );
+      expect(consola.warn).not.toHaveBeenCalled();
+    });
   });
 });

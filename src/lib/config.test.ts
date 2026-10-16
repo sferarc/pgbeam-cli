@@ -1,25 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthProfile } from "./config";
-
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-}));
-
-vi.mock("node:os", () => ({
-  homedir: vi.fn(() => "/home/testuser"),
-}));
 
 vi.mock("consola", () => ({
   consola: { warn: vi.fn() },
 }));
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { consola } from "consola";
 import {
   getCurrentProfile,
@@ -50,13 +48,30 @@ const apiKeyProfile: AuthProfile = {
   label: "ci",
 };
 
+let xdg: string;
+let dir: string;
+let authPath: string;
+
+function writeRaw(content: string, mode = 0o600): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(authPath, content, { mode });
+  chmodSync(authPath, mode);
+}
+
 function mockConfigFile(content: unknown): void {
-  vi.mocked(existsSync).mockReturnValue(true);
-  vi.mocked(readFileSync).mockReturnValue(JSON.stringify(content));
+  writeRaw(JSON.stringify(content));
 }
 
 function mockNoFile(): void {
-  vi.mocked(existsSync).mockReturnValue(false);
+  rmSync(dir, { recursive: true, force: true });
+}
+
+function written(): { currentProfile: string; profiles: Record<string, AuthProfile> } {
+  return JSON.parse(readFileSync(authPath, "utf-8"));
+}
+
+function mode(path: string): number {
+  return statSync(path).mode & 0o777;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +79,15 @@ function mockNoFile(): void {
 // ---------------------------------------------------------------------------
 beforeEach(() => {
   vi.clearAllMocks();
+  xdg = mkdtempSync(join(tmpdir(), "pgbeam-cli-config-"));
+  dir = join(xdg, "pgbeam");
+  authPath = join(dir, "auth.json");
+  process.env.XDG_CONFIG_HOME = xdg;
+});
+
+afterEach(() => {
   delete process.env.XDG_CONFIG_HOME;
+  rmSync(xdg, { recursive: true, force: true });
 });
 
 describe("loadAuthConfig", () => {
@@ -74,7 +97,7 @@ describe("loadAuthConfig", () => {
     const config = loadAuthConfig();
 
     expect(config).toEqual({ currentProfile: "", profiles: {} });
-    expect(readFileSync).not.toHaveBeenCalled();
+    expect(existsSync(dir)).toBe(false);
   });
 
   it("returns parsed config from valid JSON", () => {
@@ -90,8 +113,7 @@ describe("loadAuthConfig", () => {
   });
 
   it("returns empty config and warns on corrupted JSON", () => {
-    vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(readFileSync).mockReturnValue("{not-valid-json");
+    writeRaw("{not-valid-json");
 
     const config = loadAuthConfig();
 
@@ -109,8 +131,7 @@ describe("loadAuthConfig", () => {
   });
 
   it("returns empty config when JSON is null", () => {
-    vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(readFileSync).mockReturnValue("null");
+    writeRaw("null");
 
     const config = loadAuthConfig();
 
@@ -128,15 +149,42 @@ describe("saveAuthConfig", () => {
 
     saveAuthConfig(config);
 
-    expect(mkdirSync).toHaveBeenCalledWith(expect.stringContaining("pgbeam"), {
-      recursive: true,
-      mode: 0o700,
-    });
-    expect(writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("auth.json"),
-      `${JSON.stringify(config, null, 2)}\n`,
-      { mode: 0o600 },
-    );
+    expect(readFileSync(authPath, "utf-8")).toBe(`${JSON.stringify(config, null, 2)}\n`);
+    expect(mode(authPath)).toBe(0o600);
+    expect(mode(dir)).toBe(0o700);
+  });
+
+  it("tightens an existing world-readable file and directory", () => {
+    mockConfigFile({ currentProfile: "", profiles: {} });
+    chmodSync(dir, 0o755);
+    chmodSync(authPath, 0o644);
+
+    setProfile("default", oauthProfile);
+
+    expect(mode(authPath)).toBe(0o600);
+    expect(mode(dir)).toBe(0o700);
+  });
+
+  it("replaces the file through a rename and leaves no temp file behind", () => {
+    mockConfigFile({ currentProfile: "default", profiles: { default: oauthProfile } });
+    const before = statSync(authPath).ino;
+
+    setProfile("ci", apiKeyProfile);
+
+    expect(statSync(authPath).ino).not.toBe(before);
+    expect(readdirSync(dir)).toEqual(["auth.json"]);
+  });
+
+  it("moves a corrupted file aside instead of overwriting it", () => {
+    writeRaw('{"currentProfile":"default","profiles":{"default":{"method":"oauth","tok');
+
+    setProfile("ci", apiKeyProfile);
+
+    const aside = readdirSync(dir).filter((f) => f.startsWith("auth.json.corrupt-"));
+    expect(aside).toHaveLength(1);
+    expect(readFileSync(join(dir, aside[0]), "utf-8")).toContain('"default"');
+    expect(written()).toEqual({ currentProfile: "ci", profiles: { ci: apiKeyProfile } });
+    expect(consola.warn).toHaveBeenCalledWith(expect.stringContaining(aside[0]));
   });
 });
 
@@ -186,9 +234,9 @@ describe("setProfile", () => {
 
     setProfile("default", oauthProfile);
 
-    const written = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
-    expect(written.currentProfile).toBe("default");
-    expect(written.profiles.default).toEqual(oauthProfile);
+    const saved = written();
+    expect(saved.currentProfile).toBe("default");
+    expect(saved.profiles.default).toEqual(oauthProfile);
   });
 
   it("does not change current when adding a second profile", () => {
@@ -199,9 +247,9 @@ describe("setProfile", () => {
 
     setProfile("ci", apiKeyProfile);
 
-    const written = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
-    expect(written.currentProfile).toBe("default");
-    expect(written.profiles.ci).toEqual(apiKeyProfile);
+    const saved = written();
+    expect(saved.currentProfile).toBe("default");
+    expect(saved.profiles.ci).toEqual(apiKeyProfile);
   });
 });
 
@@ -214,9 +262,9 @@ describe("removeProfile", () => {
 
     removeProfile("ci");
 
-    const written = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
-    expect(written.profiles.ci).toBeUndefined();
-    expect(written.currentProfile).toBe("default");
+    const saved = written();
+    expect(saved.profiles.ci).toBeUndefined();
+    expect(saved.currentProfile).toBe("default");
   });
 
   it("switches current to the next available profile when removing the active one", () => {
@@ -227,9 +275,9 @@ describe("removeProfile", () => {
 
     removeProfile("default");
 
-    const written = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
-    expect(written.profiles.default).toBeUndefined();
-    expect(written.currentProfile).toBe("ci");
+    const saved = written();
+    expect(saved.profiles.default).toBeUndefined();
+    expect(saved.currentProfile).toBe("ci");
   });
 
   it("sets current to empty string when removing the last profile", () => {
@@ -240,9 +288,9 @@ describe("removeProfile", () => {
 
     removeProfile("default");
 
-    const written = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
-    expect(written.currentProfile).toBe("");
-    expect(Object.keys(written.profiles)).toHaveLength(0);
+    const saved = written();
+    expect(saved.currentProfile).toBe("");
+    expect(Object.keys(saved.profiles)).toHaveLength(0);
   });
 });
 
@@ -256,8 +304,8 @@ describe("switchProfile", () => {
     const result = switchProfile("ci");
 
     expect(result).toBe(true);
-    const written = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
-    expect(written.currentProfile).toBe("ci");
+    const saved = written();
+    expect(saved.currentProfile).toBe("ci");
   });
 
   it("returns false for a non-existent profile and does not save", () => {
@@ -269,7 +317,7 @@ describe("switchProfile", () => {
     const result = switchProfile("nope");
 
     expect(result).toBe(false);
-    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(written().currentProfile).toBe("default");
   });
 });
 

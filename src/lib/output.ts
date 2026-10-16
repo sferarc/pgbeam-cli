@@ -71,9 +71,30 @@ function truncationEnabled(): boolean {
   return !process.argv.includes("--no-trunc");
 }
 
+/**
+ * Replace C0 controls (except tab), DEL and C1 controls with a visible `\xNN`
+ * escape. API values such as audited SQL text or credential names are written
+ * by agents, and an ESC, CSI (0x9b) or OSC sequence in them would otherwise be
+ * interpreted by the operator's terminal.
+ */
+export function sanitizeForTerminal(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    const control = (code < 0x20 && code !== 0x09) || (code >= 0x7f && code <= 0x9f);
+    out += control ? `\\x${code.toString(16).padStart(2, "0")}` : s[i];
+  }
+  return out;
+}
+
+/** A value on one terminal line: newlines collapsed, control characters escaped. */
+function renderInline(value: string): string {
+  return sanitizeForTerminal(value.replace(/\s*\r?\n\s*/g, " "));
+}
+
 /** Render a table cell: newlines collapsed, optionally capped with an ellipsis. */
 function renderCell(value: unknown, truncate: boolean, maxWidth: number): string {
-  const flat = String(value ?? "").replace(/\s*\r?\n\s*/g, " ");
+  const flat = renderInline(String(value ?? ""));
   if (!truncate || flat.length <= maxWidth) return flat;
   return `${flat.slice(0, maxWidth - 1)}…`;
 }
@@ -96,14 +117,14 @@ export function outputTable(
   const rendered = rows.map((row) =>
     cols.map((col) => renderCell(row[col.key], truncate, maxWidth)),
   );
-  const widths = cols.map((col, i) => {
-    const header = col.label ?? col.key;
+  const headers = cols.map((col) => renderInline((col.label ?? col.key).toUpperCase()));
+  const widths = headers.map((header, i) => {
     const maxData = rendered.reduce((max, cells) => Math.max(max, cells[i].length), 0);
     return Math.max(header.length, maxData);
   });
 
   // Header
-  const header = cols.map((col, i) => (col.label ?? col.key).toUpperCase().padEnd(widths[i]));
+  const header = headers.map((label, i) => label.padEnd(widths[i]));
   consola.log(header.join("  "));
 
   // Rows
@@ -128,7 +149,7 @@ function outputHuman(data: unknown): void {
       return;
     }
     for (const item of data) {
-      consola.log(typeof item === "object" ? JSON.stringify(item) : String(item));
+      consola.log(renderInline(typeof item === "object" ? JSON.stringify(item) : String(item)));
     }
     return;
   }
@@ -138,20 +159,21 @@ function outputHuman(data: unknown): void {
       consola.log("{}");
       return;
     }
-    const width = Math.max(...keys.map((k) => k.length)) + 1;
-    for (const key of keys) {
+    const labels = keys.map(renderInline);
+    const width = Math.max(...labels.map((k) => k.length)) + 1;
+    keys.forEach((key, i) => {
       const value = data[key];
       const renderedValue =
         value === null || value === undefined
           ? "-"
           : typeof value === "object"
-            ? JSON.stringify(value)
-            : String(value);
-      consola.log(`${`${key}:`.padEnd(width + 1)} ${renderedValue}`);
-    }
+            ? sanitizeForTerminal(JSON.stringify(value))
+            : renderInline(String(value));
+      consola.log(`${`${labels[i]}:`.padEnd(width + 1)} ${renderedValue}`);
+    });
     return;
   }
-  consola.log(String(data));
+  consola.log(renderInline(String(data)));
 }
 
 export function output(data: unknown, json: boolean, tableFn?: () => void): void {

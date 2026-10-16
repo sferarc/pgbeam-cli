@@ -3,7 +3,7 @@ import { consola } from "consola";
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
-import { formatDate, output } from "../../lib/output.js";
+import { formatDate, output, sanitizeForTerminal } from "../../lib/output.js";
 
 /** Right-align a number in a fixed column so the table stays readable. */
 function num(value: number, width: number): string {
@@ -95,7 +95,7 @@ export default defineCommand({
         const line = (label: string, l: (typeof report.agents)[number], showPct: boolean) => {
           consola.log(
             [
-              label.slice(0, 24).padEnd(24),
+              sanitizeForTerminal(label).slice(0, 24).padEnd(24),
               num(l.entries, 8),
               num(l.allowed, 8),
               num(l.blocked, 8),
@@ -140,7 +140,7 @@ export default defineCommand({
             `The audit trail lost entries in this window: ${markerCount} gap marker(s) accounting for at least ${d.entries_dropped} entr(ies)${unparsed}. The totals above are a floor, not a measurement.`,
           );
           for (const reason of d.reasons) {
-            consola.log(`  ${reason}`);
+            consola.log(`  ${sanitizeForTerminal(reason)}`);
           }
         }
       });

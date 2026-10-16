@@ -4,16 +4,18 @@ import { requireArg } from "../../lib/args.js";
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
-import { formatDate, output } from "../../lib/output.js";
+import { formatDate, output, sanitizeForTerminal } from "../../lib/output.js";
 
 /** Render a table list, or a dash when the session touched nothing that way. */
 function tableList(names: string[]): string {
-  return names.length > 0 ? names.join(", ") : "-";
+  return names.length > 0 ? sanitizeForTerminal(names.join(", ")) : "-";
 }
 
 /** One alert on one line: when, how bad, what kind, and where triage stands. */
 function alertLine(a: { created_at: string; severity: string; kind: string; status: string }) {
-  return `  ${formatDate(a.created_at)}  ${a.severity}  ${a.kind}  (${a.status})`;
+  return sanitizeForTerminal(
+    `  ${formatDate(a.created_at)}  ${a.severity}  ${a.kind}  (${a.status})`,
+  );
 }
 
 export default defineCommand({
@@ -71,7 +73,7 @@ export default defineCommand({
       });
 
       output(summary, args.json, () => {
-        consola.log(`Session:     ${summary.session_id}`);
+        consola.log(`Session:     ${sanitizeForTerminal(summary.session_id)}`);
         consola.log(
           `Window:      ${formatDate(summary.started_at)} to ${formatDate(summary.ended_at)}`,
         );

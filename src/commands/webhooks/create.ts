@@ -44,7 +44,7 @@ const webhookEventTypes = {
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
-import { output } from "../../lib/output.js";
+import { output, sanitizeForTerminal } from "../../lib/output.js";
 
 export default defineCommand({
   meta: {
@@ -135,7 +135,7 @@ export default defineCommand({
 
       output(result, args.json, () => {
         consola.success(`Webhook created: ${result.id}`);
-        consola.log(`  URL: ${result.url}`);
+        consola.log(`  URL: ${sanitizeForTerminal(result.url)}`);
       });
     });
   },

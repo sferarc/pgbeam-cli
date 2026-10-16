@@ -26,7 +26,14 @@ vi.mock("./project.js", () => ({
 }));
 
 import { ApiError } from "pgbeam";
-import { rawRequest, requireOrg, requireProject, resolveContext } from "./client";
+import {
+  profileOrgWarning,
+  rawRequest,
+  requireOrg,
+  requireProject,
+  resolveAuthState,
+  resolveContext,
+} from "./client";
 import { getCurrentProfile, getProfile } from "./config.js";
 import { loadProjectLink } from "./project.js";
 
@@ -46,7 +53,9 @@ beforeEach(() => {
   mockFetch = vi.fn();
   vi.stubGlobal("fetch", mockFetch);
   // Clean up env vars
+  delete process.env.PGBEAM_API_KEY;
   delete process.env.PGBEAM_TOKEN;
+  delete process.env.PGBEAM_API_TOKEN;
   delete process.env.PGBEAM_PROFILE;
   delete process.env.PGBEAM_API_URL;
 });
@@ -226,6 +235,80 @@ describe("resolveContext", () => {
       const ctx = resolveContext({ ...defaultArgs, token: "tok" });
       expect(ctx.client).toBeDefined();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveAuthState, org consistency with resolveContext
+// ---------------------------------------------------------------------------
+describe("resolveAuthState org", () => {
+  const currentProfile = {
+    method: "oauth" as const,
+    token: "profile-tok",
+    orgId: "org-profile",
+    refreshToken: "ref",
+    expiresAt: "2099-01-01",
+    email: "a@b.com",
+  };
+
+  it("reports the stored profile's org for an env token, matching resolveContext", () => {
+    process.env.PGBEAM_API_KEY = "env-key";
+    vi.mocked(getCurrentProfile).mockReturnValue(currentProfile);
+
+    const auth = resolveAuthState(defaultArgs);
+
+    expect(auth).toMatchObject({ source: "env", orgId: "org-profile", orgSource: "profile" });
+    expect(resolveContext(defaultArgs).orgId).toBe(auth.orgId);
+    expect(profileOrgWarning(auth)).toContain("PGBEAM_API_KEY");
+  });
+
+  it("reports the stored profile's org for a --token flag", () => {
+    vi.mocked(getCurrentProfile).mockReturnValue(currentProfile);
+
+    const auth = resolveAuthState({ ...defaultArgs, token: "flag-tok" });
+
+    expect(auth).toMatchObject({ source: "flag", orgId: "org-profile", orgSource: "profile" });
+    expect(profileOrgWarning(auth)).toContain("--token");
+  });
+
+  it("lets --org override the stored profile's org", () => {
+    process.env.PGBEAM_API_KEY = "env-key";
+    vi.mocked(getCurrentProfile).mockReturnValue(currentProfile);
+    const args = { ...defaultArgs, org: "org-flag" };
+
+    const auth = resolveAuthState(args);
+
+    expect(auth).toMatchObject({ orgId: "org-flag", orgSource: "flag" });
+    expect(resolveContext(args).orgId).toBe("org-flag");
+    expect(profileOrgWarning(auth)).toBeNull();
+  });
+
+  it("lets --org override an explicit --profile's org", () => {
+    vi.mocked(getProfile).mockReturnValue(currentProfile);
+
+    const auth = resolveAuthState({ ...defaultArgs, profile: "p", org: "org-flag" });
+
+    expect(auth).toMatchObject({ source: "profile-flag", orgId: "org-flag", orgSource: "flag" });
+  });
+
+  it("returns a null org when no profile exists", () => {
+    process.env.PGBEAM_API_KEY = "env-key";
+    vi.mocked(getCurrentProfile).mockReturnValue(null);
+
+    const auth = resolveAuthState(defaultArgs);
+
+    expect(auth).toMatchObject({ source: "env", orgId: null, orgSource: "none" });
+    expect(resolveContext(defaultArgs).orgId).toBeNull();
+    expect(profileOrgWarning(auth)).toBeNull();
+  });
+
+  it("does not warn when the token itself came from the profile", () => {
+    vi.mocked(getCurrentProfile).mockReturnValue(currentProfile);
+
+    const auth = resolveAuthState(defaultArgs);
+
+    expect(auth).toMatchObject({ source: "profile", orgSource: "profile" });
+    expect(profileOrgWarning(auth)).toBeNull();
   });
 });
 

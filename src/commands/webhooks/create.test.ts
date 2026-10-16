@@ -23,7 +23,9 @@ vi.mock("../../lib/errors.js", () => ({
   runCommand: vi.fn(async (fn: () => Promise<void>) => fn()),
 }));
 
-vi.mock("../../lib/output.js", () => ({
+vi.mock("../../lib/output.js", async (importOriginal) => ({
+  sanitizeForTerminal: (await importOriginal<typeof import("../../lib/output.js")>())
+    .sanitizeForTerminal,
   output: vi.fn((data: unknown, json: boolean, tableFn?: () => void) => {
     void data;
     if (!json && tableFn) tableFn();

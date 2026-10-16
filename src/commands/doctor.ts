@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { type ApiClient, PgBeamClient } from "pgbeam";
 import { optionalArg } from "../lib/args.js";
-import { apiBaseUrl, resolveAuthState } from "../lib/client.js";
+import { apiBaseUrl, profileOrgWarning, resolveAuthState } from "../lib/client.js";
 import { VERSION } from "../lib/constants.js";
 import { type GlobalArgs, globalArgs } from "../lib/flags.js";
 import { probeMcp, probeTcp } from "../lib/net.js";
@@ -66,6 +66,7 @@ interface DoctorState {
   token: string | null;
   client: ApiClient | null;
   orgId: string | null;
+  orgWarning: string | null;
   projectId: string | null;
   orgs: OrganizationSummary[] | null;
   proxyHost: string | null;
@@ -169,6 +170,9 @@ function checkOrganization(state: DoctorState): CheckResult {
   }
   if (state.orgs) {
     const match = state.orgs.find((o) => o.id === state.orgId);
+    if (match && state.orgWarning) {
+      return warn("org", "Organization", `${match.name} (${match.id}).`, state.orgWarning);
+    }
     if (match) {
       return ok("org", "Organization", `${match.name} (${match.id}).`);
     }
@@ -177,6 +181,14 @@ function checkOrganization(state: DoctorState): CheckResult {
       "Organization",
       `Selected org ${state.orgId} is not visible to this credential.`,
       "Check the active profile / --org, or that the token has access to this organization.",
+    );
+  }
+  if (state.orgWarning) {
+    return warn(
+      "org",
+      "Organization",
+      `${state.orgId} (not verified, API unreachable).`,
+      state.orgWarning,
     );
   }
   return skip("org", "Organization", `${state.orgId} (not verified, API unreachable).`);
@@ -407,7 +419,8 @@ export async function runDoctor(args: GlobalArgs, deps: DoctorDeps): Promise<Che
   const state: DoctorState = {
     token: auth.token,
     client: auth.token ? deps.makeClient(auth.token) : null,
-    orgId: args.org ?? auth.orgId ?? null,
+    orgId: auth.orgId,
+    orgWarning: profileOrgWarning(auth),
     projectId,
     orgs: null,
     proxyHost: null,

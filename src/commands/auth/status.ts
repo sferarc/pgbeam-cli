@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { resolveAuthState } from "../../lib/client.js";
+import { profileOrgWarning, resolveAuthState } from "../../lib/client.js";
 import { loadAuthConfig } from "../../lib/config.js";
 import { globalArgs } from "../../lib/flags.js";
 import { errorStatus, fetchOrganizations, type OrganizationSummary } from "../../lib/orgs.js";
@@ -10,6 +10,13 @@ const SOURCE_LABELS: Record<string, string> = {
   flag: "--token flag",
   "profile-flag": "--profile flag",
   env: "PGBEAM_API_KEY env",
+  "env-profile": "PGBEAM_PROFILE env",
+  profile: "saved profile",
+};
+
+const ORG_SOURCE_LABELS: Record<string, string> = {
+  flag: "--org flag",
+  "profile-flag": "--profile flag",
   "env-profile": "PGBEAM_PROFILE env",
   profile: "saved profile",
 };
@@ -51,14 +58,14 @@ export default defineCommand({
     description: "Show current authentication status",
     docs: {
       longDescription:
-        "Display the credential the CLI would use (masked), where it came from (profile, flag, or environment), the authentication method, organization, and email. When the API is reachable, the credential is verified live with a cheap authenticated call; offline, the stored details are shown unverified. If not authenticated, prints a warning with instructions to log in. Also available as the `pgbeam whoami` alias.",
+        "Display the credential the CLI would use (masked), where it came from (profile, flag, or environment), the authentication method, the organization and where it came from, and email. When the API is reachable, the credential is verified live with a cheap authenticated call; offline, the stored details are shown unverified. If not authenticated, prints a warning with instructions to log in. Also available as the `pgbeam whoami` alias.",
       examples: [
         { comment: "Check who you are authenticated as", command: "pgbeam auth status" },
         { comment: "Same thing, using the alias", command: "pgbeam whoami" },
         { comment: "Get auth status as JSON for scripting", command: "pgbeam auth status --json" },
       ],
       response:
-        "Displays profile name (or credential source), method, masked key, email, organization, and live verification result. With `--json`, returns an object with `authenticated`, `verified`, `profile`, `source`, `method`, `key`, `orgId`, `orgName`, and `email` fields. Exits non-zero when the credential is missing or rejected by the API.",
+        "Displays profile name (or credential source), method, masked key, email, organization, and live verification result. With `--json`, returns an object with `authenticated`, `verified`, `profile`, `source`, `method`, `key`, `orgId`, `orgName`, `orgSource` (`flag`, `profile-flag`, `env-profile`, `profile`, or `none`), and `email` fields. Exits non-zero when the credential is missing or rejected by the API.",
     },
   },
   args: {
@@ -106,6 +113,7 @@ export default defineCommand({
       key: maskKey(auth.token),
       orgId: auth.orgId,
       orgName,
+      orgSource: auth.orgSource,
       email: profile?.email ?? null,
     };
 
@@ -118,8 +126,12 @@ export default defineCommand({
       if (auth.method) consola.log(`Method:   ${auth.method}`);
       consola.log(`Key:      ${info.key}`);
       if (info.email) consola.log(`Email:    ${info.email}`);
-      if (auth.orgId)
-        consola.log(`Org:      ${orgName ? `${orgName} (${auth.orgId})` : auth.orgId}`);
+      if (auth.orgId) {
+        const org = orgName ? `${orgName} (${auth.orgId})` : auth.orgId;
+        consola.log(
+          `Org:      ${org}, from ${ORG_SOURCE_LABELS[auth.orgSource] ?? auth.orgSource}`,
+        );
+      }
       if (profile?.expiresAt) consola.log(`Expires:  ${profile.expiresAt}`);
       if (check.verified === true) {
         consola.log("Verified: yes (accepted by the API)");
@@ -127,6 +139,9 @@ export default defineCommand({
         consola.log("Verified: no (API unreachable, showing stored details)");
       }
     });
+
+    const orgWarning = profileOrgWarning(auth);
+    if (orgWarning) consola.warn(orgWarning);
 
     if (check.verified === false) {
       consola.warn(

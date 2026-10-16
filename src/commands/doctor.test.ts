@@ -12,7 +12,8 @@ vi.mock("consola", () => ({
 }));
 
 const mockResolveAuthState = vi.fn();
-vi.mock("../lib/client.js", () => ({
+vi.mock("../lib/client.js", async (importOriginal) => ({
+  profileOrgWarning: (await importOriginal<typeof import("../lib/client.js")>()).profileOrgWarning,
   resolveAuthState: (...a: unknown[]) => mockResolveAuthState(...a),
   apiBaseUrl: () => "https://api.test",
 }));
@@ -186,6 +187,24 @@ describe("runDoctor", () => {
 
     expect(byId(results, "token").status).toBe("fail");
     expect(byId(results, "token").remedy).toContain("auth login");
+  });
+
+  it("warns when an env key is paired with a stored profile's org", async () => {
+    mockResolveAuthState.mockReturnValue({
+      token: "pbu_x",
+      source: "env",
+      orgId: "org_1",
+      orgSource: "profile",
+      method: "api-key",
+    });
+    const deps = makeDeps({
+      fetchOrganizations: vi.fn().mockResolvedValue([{ id: "org_1", name: "Acme", slug: "acme" }]),
+    });
+
+    const results = await runDoctor(args(), deps);
+
+    expect(byId(results, "org").status).toBe("warn");
+    expect(byId(results, "org").remedy).toContain("--org");
   });
 
   it("fails the project check on a 404", async () => {

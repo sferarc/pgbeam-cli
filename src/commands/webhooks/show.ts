@@ -4,7 +4,7 @@ import { requireArg } from "../../lib/args.js";
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
-import { formatDate, output } from "../../lib/output.js";
+import { formatDate, output, sanitizeForTerminal } from "../../lib/output.js";
 
 export default defineCommand({
   meta: {
@@ -43,19 +43,19 @@ export default defineCommand({
       });
 
       output(result, args.json, () => {
-        consola.log(`ID:          ${result.id}`);
-        consola.log(`Project:     ${result.project_id}`);
-        consola.log(`URL:         ${result.url}`);
-        consola.log(`Format:      ${result.format}`);
+        consola.log(`ID:          ${sanitizeForTerminal(result.id)}`);
+        consola.log(`Project:     ${sanitizeForTerminal(result.project_id)}`);
+        consola.log(`URL:         ${sanitizeForTerminal(result.url)}`);
+        consola.log(`Format:      ${sanitizeForTerminal(result.format)}`);
         consola.log(
           `Events:      ${
             result.event_types && result.event_types.length > 0
-              ? result.event_types.join(", ")
+              ? sanitizeForTerminal(result.event_types.join(", "))
               : "all"
           }`,
         );
         consola.log(`Enabled:     ${result.enabled ? "yes" : "no"}`);
-        consola.log(`Description: ${result.description ?? "-"}`);
+        consola.log(`Description: ${sanitizeForTerminal(result.description ?? "-")}`);
         consola.log(`Created:     ${formatDate(result.created_at)}`);
         consola.log(`Updated:     ${formatDate(result.updated_at)}`);
       });

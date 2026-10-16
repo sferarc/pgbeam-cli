@@ -1,4 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { consola } from "consola";
@@ -46,21 +58,52 @@ function isAuthConfig(value: unknown): value is AuthConfig {
   return true;
 }
 
+function parseAuthConfig(raw: string): AuthConfig | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isAuthConfig(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadAuthConfig(): AuthConfig {
   const path = authConfigPath();
   if (!existsSync(path)) {
     return { currentProfile: "", profiles: {} };
   }
-  const raw = readFileSync(path, "utf-8");
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isAuthConfig(parsed)) {
-      throw new Error("invalid shape");
-    }
-    return parsed;
-  } catch {
-    consola.warn("Corrupted auth config. Run `pgbeam auth login` to reset.");
+  const parsed = parseAuthConfig(readFileSync(path, "utf-8"));
+  if (!parsed) {
+    consola.warn(
+      `Corrupted auth config at ${path}. It will be moved to ${path}.corrupt-<timestamp> on the next profile change. Run \`pgbeam auth login\` to reset.`,
+    );
     return { currentProfile: "", profiles: {} };
+  }
+  return parsed;
+}
+
+// Writing over a corrupted file would drop every profile it held, so keep it for inspection.
+function moveAsideIfCorrupted(path: string): void {
+  if (!existsSync(path) || parseAuthConfig(readFileSync(path, "utf-8"))) return;
+  const aside = `${path}.corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  renameSync(path, aside);
+  consola.warn(`Moved corrupted auth config to ${aside}.`);
+}
+
+function writeFileAtomic(path: string, data: string): void {
+  const tmp = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
+  const fd = openSync(tmp, "wx", 0o600);
+  try {
+    try {
+      writeFileSync(fd, data);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(tmp, path);
+  } catch (err) {
+    rmSync(tmp, { force: true });
+    throw err;
   }
 }
 
@@ -68,7 +111,12 @@ export function saveAuthConfig(config: AuthConfig): void {
   const path = authConfigPath();
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  // mkdir and open modes only apply on creation, so tighten what an older CLI or a restore left behind.
+  const posix = process.platform !== "win32";
+  if (posix) chmodSync(dir, 0o700);
+  moveAsideIfCorrupted(path);
+  writeFileAtomic(path, `${JSON.stringify(config, null, 2)}\n`);
+  if (posix) chmodSync(path, 0o600);
 }
 
 export function getCurrentProfile(): AuthProfile | null {

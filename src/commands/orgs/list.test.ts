@@ -64,6 +64,7 @@ function setupUnauthenticated() {
     token: null,
     source: "none",
     orgId: null,
+    orgSource: "none",
     method: null,
   });
 }
@@ -73,6 +74,7 @@ function setupAuthenticated(orgId: string | null = "org-1") {
     token: "tok-1",
     source: "profile",
     orgId,
+    orgSource: orgId ? "profile" : "none",
     method: "api-key",
   });
   vi.mocked(resolveContext).mockReturnValue({
