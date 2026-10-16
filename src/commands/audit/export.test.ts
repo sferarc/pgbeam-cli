@@ -1,9 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  chmodSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockWriteFileSync = vi.fn();
-vi.mock("node:fs", () => ({
-  writeFileSync: (...args: unknown[]) => mockWriteFileSync(...args),
-}));
+const fsFailure = vi.hoisted(() => ({ failWrites: false }));
+vi.mock("node:fs", async (importOriginal) => {
+  const fs = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...fs,
+    writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
+      if (fsFailure.failWrites) throw new Error("ENOSPC: no space left on device");
+      return fs.writeFileSync(...args);
+    },
+  };
+});
 
 vi.mock("consola", () => ({
   consola: {
@@ -35,9 +53,15 @@ const mockExportAuditLogs = vi.fn();
 const baseArgs = { json: false, "no-color": false, debug: false };
 const CSV = "id,ts,event\n1,2026-01-01T00:00:00Z,query\n";
 
+const posix = process.platform !== "win32";
+
 describe("audit export", () => {
+  let dir: string;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    fsFailure.failWrites = false;
+    dir = mkdtempSync(join(tmpdir(), "pgbeam-audit-export-"));
     vi.mocked(resolveContext).mockReturnValue({
       client: { agents: { exportAuditLogs: mockExportAuditLogs } } as never,
       orgId: "org_123",
@@ -45,6 +69,10 @@ describe("audit export", () => {
     });
     vi.mocked(requireProject).mockReturnValue("prj_1");
     mockExportAuditLogs.mockResolvedValue(CSV);
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("writes CSV to stdout by default", async () => {
@@ -57,15 +85,42 @@ describe("audit export", () => {
       queryParams: {},
     });
     expect(writeSpy).toHaveBeenCalledWith(CSV);
-    expect(mockWriteFileSync).not.toHaveBeenCalled();
     writeSpy.mockRestore();
   });
 
-  it("writes CSV to a file with --output", async () => {
-    await run({ args: { ...baseArgs, output: "audit.csv" } } as never);
+  it("writes CSV to an owner-only file with --output", async () => {
+    const out = join(dir, "audit.csv");
 
-    expect(mockWriteFileSync).toHaveBeenCalledWith("audit.csv", CSV);
-    expect(consola.success).toHaveBeenCalledWith("Audit log exported to audit.csv.");
+    await run({ args: { ...baseArgs, output: out } } as never);
+
+    expect(readFileSync(out, "utf-8")).toBe(CSV);
+    if (posix) expect(statSync(out).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dir)).toEqual(["audit.csv"]);
+    expect(consola.success).toHaveBeenCalledWith(`Audit log exported to ${out}.`);
+  });
+
+  it.skipIf(!posix)("tightens an existing world-readable --output file to 0600", async () => {
+    const out = join(dir, "audit.csv");
+    writeFileSync(out, "old");
+    chmodSync(out, 0o644);
+
+    await run({ args: { ...baseArgs, output: out } } as never);
+
+    expect(readFileSync(out, "utf-8")).toBe(CSV);
+    expect(statSync(out).mode & 0o777).toBe(0o600);
+  });
+
+  it("leaves an existing --output file untouched when the write fails", async () => {
+    const out = join(dir, "audit.csv");
+    writeFileSync(out, "previous export");
+    fsFailure.failWrites = true;
+
+    await expect(run({ args: { ...baseArgs, output: out } } as never)).rejects.toThrow(/ENOSPC/);
+
+    fsFailure.failWrites = false;
+    expect(readFileSync(out, "utf-8")).toBe("previous export");
+    expect(readdirSync(dir)).toEqual(["audit.csv"]);
+    expect(consola.success).not.toHaveBeenCalled();
   });
 
   it("forwards all filters as query params", async () => {

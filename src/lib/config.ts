@@ -1,19 +1,8 @@
-import { randomBytes } from "node:crypto";
-import {
-  chmodSync,
-  closeSync,
-  existsSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { consola } from "consola";
+import { writePrivateFile } from "./files.js";
 
 export interface AuthProfile {
   method: "oauth" | "api-key";
@@ -90,23 +79,6 @@ function moveAsideIfCorrupted(path: string): void {
   consola.warn(`Moved corrupted auth config to ${aside}.`);
 }
 
-function writeFileAtomic(path: string, data: string): void {
-  const tmp = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
-  const fd = openSync(tmp, "wx", 0o600);
-  try {
-    try {
-      writeFileSync(fd, data);
-      fsyncSync(fd);
-    } finally {
-      closeSync(fd);
-    }
-    renameSync(tmp, path);
-  } catch (err) {
-    rmSync(tmp, { force: true });
-    throw err;
-  }
-}
-
 export function saveAuthConfig(config: AuthConfig): void {
   const path = authConfigPath();
   const dir = dirname(path);
@@ -115,8 +87,7 @@ export function saveAuthConfig(config: AuthConfig): void {
   const posix = process.platform !== "win32";
   if (posix) chmodSync(dir, 0o700);
   moveAsideIfCorrupted(path);
-  writeFileAtomic(path, `${JSON.stringify(config, null, 2)}\n`);
-  if (posix) chmodSync(path, 0o600);
+  writePrivateFile(path, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 export function getCurrentProfile(): AuthProfile | null {

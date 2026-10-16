@@ -1,4 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  chmodSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -11,9 +22,17 @@ vi.mock("../../lib/flags.js", () => ({
   globalArgs: {},
 }));
 
-vi.mock("node:fs", () => ({
-  writeFileSync: vi.fn(),
-}));
+const fsFailure = vi.hoisted(() => ({ failWrites: false }));
+vi.mock("node:fs", async (importOriginal) => {
+  const fs = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...fs,
+    writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
+      if (fsFailure.failWrites) throw new Error("ENOSPC: no space left on device");
+      return fs.writeFileSync(...args);
+    },
+  };
+});
 
 vi.mock("../../lib/client.js", () => ({
   resolveContext: vi.fn(),
@@ -32,7 +51,6 @@ vi.mock("consola", () => ({
   consola: { success: vi.fn(), log: vi.fn(), info: vi.fn() },
 }));
 
-import { writeFileSync } from "node:fs";
 import { consola } from "consola";
 import { resolveContext } from "../../lib/client.js";
 import { output } from "../../lib/output.js";
@@ -71,23 +89,60 @@ async function runHandler(args: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+const posix = process.platform !== "win32";
+let dir: string;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  fsFailure.failWrites = false;
+  dir = mkdtempSync(join(tmpdir(), "pgbeam-account-export-"));
+});
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
 });
 
 describe("account export", () => {
-  it("writes to file when --file is provided", async () => {
+  it("writes an owner-only file when --file is provided", async () => {
     setupContext();
     mockExportAccountData.mockResolvedValue(sampleExport);
+    const out = join(dir, "export.json");
 
-    await runHandler({ file: "/tmp/export.json" });
+    await runHandler({ file: out });
 
-    expect(writeFileSync).toHaveBeenCalledWith(
-      "/tmp/export.json",
-      JSON.stringify(sampleExport, null, 2),
-    );
-    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining("/tmp/export.json"));
+    expect(readFileSync(out, "utf-8")).toBe(JSON.stringify(sampleExport, null, 2));
+    if (posix) expect(statSync(out).mode & 0o777).toBe(0o600);
+    expect(readdirSync(dir)).toEqual(["export.json"]);
+    expect(consola.success).toHaveBeenCalledWith(expect.stringContaining(out));
     expect(output).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(!posix)("tightens an existing world-readable --file to 0600", async () => {
+    setupContext();
+    mockExportAccountData.mockResolvedValue(sampleExport);
+    const out = join(dir, "export.json");
+    writeFileSync(out, "{}");
+    chmodSync(out, 0o644);
+
+    await runHandler({ file: out });
+
+    expect(readFileSync(out, "utf-8")).toBe(JSON.stringify(sampleExport, null, 2));
+    expect(statSync(out).mode & 0o777).toBe(0o600);
+  });
+
+  it("leaves an existing --file untouched when the write fails", async () => {
+    setupContext();
+    mockExportAccountData.mockResolvedValue(sampleExport);
+    const out = join(dir, "export.json");
+    writeFileSync(out, "previous export");
+    fsFailure.failWrites = true;
+
+    await expect(runHandler({ file: out })).rejects.toThrow(/ENOSPC/);
+
+    fsFailure.failWrites = false;
+    expect(readFileSync(out, "utf-8")).toBe("previous export");
+    expect(readdirSync(dir)).toEqual(["export.json"]);
+    expect(consola.success).not.toHaveBeenCalled();
   });
 
   it("calls output without file when --file is not provided", async () => {
@@ -96,7 +151,6 @@ describe("account export", () => {
 
     await runHandler({});
 
-    expect(writeFileSync).not.toHaveBeenCalled();
     expect(output).toHaveBeenCalledWith(sampleExport, false, expect.any(Function));
   });
 

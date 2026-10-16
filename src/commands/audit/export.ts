@@ -1,9 +1,9 @@
-import { writeFileSync } from "node:fs";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { parseEnum } from "../../lib/args.js";
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
+import { writePrivateFile } from "../../lib/files.js";
 import { globalArgs } from "../../lib/flags.js";
 
 const auditDecisions = {
@@ -20,7 +20,7 @@ export default defineCommand({
     description: "Export agent audit logs as CSV",
     docs: {
       longDescription:
-        "Stream the linked project's agent audit entries as a CSV file, newest first, honoring the same credential, event, decision, source, and date-range filters as `audit list`. The full filtered set is streamed (no pagination), suitable for spreadsheets, SIEM ingestion, and compliance archives. Writes to stdout by default, or to a file with `--output`. The API emits CSV only; the wire/mcp/rest/control-formatted views are selected with `--source`, not a separate output format.",
+        "Export the linked project's agent audit entries as CSV, newest first, honoring the same credential, event, decision, source, and date-range filters as `audit list`. The full filtered set comes back in one response (no pagination), suitable for spreadsheets, SIEM ingestion, and compliance archives. Writes to stdout by default, or with `--output` to a file readable only by you (mode 0600), replaced in one step so an interrupted export never leaves a partial file. The API emits CSV only; the wire/mcp/rest/control-formatted views are selected with `--source`, not a separate output format.",
       examples: [
         { comment: "Export all audit entries to stdout", command: "pgbeam audit export" },
         {
@@ -92,7 +92,7 @@ export default defineCommand({
         })) ?? "";
 
       if (args.output) {
-        writeFileSync(args.output, csv);
+        writePrivateFile(args.output, csv);
         consola.success(`Audit log exported to ${args.output}.`);
       } else {
         process.stdout.write(csv.endsWith("\n") ? csv : `${csv}\n`);

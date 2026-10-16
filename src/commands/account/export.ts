@@ -1,8 +1,8 @@
-import { writeFileSync } from "node:fs";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
+import { writePrivateFile } from "../../lib/files.js";
 import { globalArgs } from "../../lib/flags.js";
 import { formatDate, output } from "../../lib/output.js";
 
@@ -12,7 +12,7 @@ export default defineCommand({
     description: "Export account data (GDPR/CCPA)",
     docs: {
       longDescription:
-        "Export all account data as required by GDPR and CCPA regulations. Includes your user profile, organizations, projects, databases, active sessions, and audit logs. Use `--file` to write the full export to a JSON file, or `--json` to print the full export to stdout.",
+        "Export all account data as required by GDPR and CCPA regulations. Includes your user profile, organizations, projects, databases, active sessions, and audit logs. Use `--file` to write the full export to a JSON file readable only by you (mode 0600), or `--json` to print the full export to stdout.",
       examples: [
         { comment: "Show a summary of your account data", command: "pgbeam account export" },
         {
@@ -40,7 +40,7 @@ export default defineCommand({
       const result = await ctx.client.account.exportAccountData();
 
       if (args.file) {
-        writeFileSync(args.file, JSON.stringify(result, null, 2));
+        writePrivateFile(args.file, JSON.stringify(result, null, 2));
         consola.success(`Account data exported to ${args.file}`);
         return;
       }
