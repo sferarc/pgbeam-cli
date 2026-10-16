@@ -2,13 +2,12 @@
  * Builds ready-to-paste MCP client configuration for PgBeam's hosted
  * agent-database MCP endpoint.
  *
- * The `claude`, `cursor` and `vscode` shapes MUST stay byte-identical to the
- * dashboard credential-reveal dialog
- * (`frontend/apps/dashboard/lib/mcp-client-config.ts`, `mcpClientConfig`) so the
- * CLI and dashboard emit the same config for the same URL + token. Clients the
- * dashboard does not offer yet (`claude-desktop`, `cline`, `windsurf`) are
- * CLI-only; do not change the three shared shapes without changing the dashboard
- * in the same commit.
+ * The `claude`, `claude-desktop`, `cursor` and `vscode` shapes MUST stay
+ * byte-identical to the dashboard's `mcpClientConfig`
+ * (`frontend/apps/dashboard/lib/mcp-client-config.ts`) so the CLI and dashboard
+ * emit the same config for the same URL + token. `cline` and `windsurf` are
+ * CLI-only; do not change a shared shape without changing the dashboard in the
+ * same commit.
  *
  * Every shape here is verified against the client's own schema or published
  * install docs, because these strings get pasted into an editor and submitted to
@@ -110,7 +109,10 @@ export function parseMcpClient(value: string): McpClient {
  * Build a ready-to-paste MCP client config (pretty-printed JSON) for the given
  * hosted URL + bearer token.
  *
- * - Claude Code / Cursor: `{ mcpServers: { pgbeam: { url, headers } } }`
+ * - Claude Code: `{ mcpServers: { pgbeam: { type: "http", url, headers } } }`.
+ *   The type is required: Claude Code reads a url entry with no type as a stdio
+ *   server and skips it.
+ * - Cursor: `{ mcpServers: { pgbeam: { url, headers } } }`
  * - VS Code: `{ servers: { pgbeam: { type: "http", url, headers } } }`
  * - Claude Desktop: an `mcp-remote` stdio bridge, because its config file takes
  *   local `command`/`args` servers only and cannot address a remote URL.
@@ -125,6 +127,7 @@ export function mcpClientConfig(client: McpClient, url: string, token: string): 
   const server = { url, headers };
   switch (client) {
     case "claude":
+      return JSON.stringify({ mcpServers: { pgbeam: { type: "http", ...server } } }, null, 2);
     case "cursor":
       return JSON.stringify({ mcpServers: { pgbeam: server } }, null, 2);
     case "vscode":

@@ -15,14 +15,16 @@ const URL = "https://abc.proxy.pgbeam.app/mcp";
 const TOKEN = "pba_a1b2c3d4e5f6g7h8";
 
 describe("mcpClientConfig", () => {
-  // `claude`, `cursor` and `vscode` mirror the dashboard `mcpClientConfig`
-  // (frontend/apps/dashboard/lib/mcp-client-config.ts) exactly.
+  // `claude`, `claude-desktop`, `cursor` and `vscode` mirror the dashboard
+  // `mcpClientConfig` (frontend/apps/dashboard/lib/mcp-client-config.ts) exactly.
   const cases: { client: McpClient; expected: object; file: string }[] = [
     {
       client: "claude",
       file: ".mcp.json",
       expected: {
-        mcpServers: { pgbeam: { url: URL, headers: { Authorization: `Bearer ${TOKEN}` } } },
+        mcpServers: {
+          pgbeam: { type: "http", url: URL, headers: { Authorization: `Bearer ${TOKEN}` } },
+        },
       },
     },
     {
@@ -90,6 +92,7 @@ describe("mcpClientConfig", () => {
     claude: `{
   "mcpServers": {
     "pgbeam": {
+      "type": "http",
       "url": "https://abc.proxy.pgbeam.app/mcp",
       "headers": {
         "Authorization": "Bearer pba_a1b2c3d4e5f6g7h8"

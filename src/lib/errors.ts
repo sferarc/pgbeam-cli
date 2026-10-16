@@ -1,4 +1,5 @@
 import { consola } from "consola";
+import { colors } from "consola/utils";
 import { ConfirmationDeclinedError } from "./confirm.js";
 import { outputJson } from "./output.js";
 
@@ -36,6 +37,8 @@ interface JsonError {
     hint?: string;
     /** Field-level detail, when the request failed validation. */
     fields?: { field: string; detail: string }[];
+    /** Correlation id to quote when reporting the failure. */
+    request_id?: string;
   };
 }
 
@@ -56,6 +59,7 @@ interface DescribedFailure {
   hint?: string;
   /** Field-level detail from a validation failure. */
   fields?: { field: string; detail: string }[];
+  requestId?: string;
   /** Parsed response body, when the error carried one (SDK ApiError, rawRequest). */
   body?: unknown;
 }
@@ -72,9 +76,11 @@ function describeFailure(err: unknown): DescribedFailure {
     const fields = Array.isArray(record.errors)
       ? (record.errors as { field: string; detail: string }[])
       : undefined;
+    const requestId = readRequestId(record, body);
     return {
       status,
       ...(code ? { code } : {}),
+      ...(requestId ? { requestId } : {}),
       message: String(message),
       hint: remediationHint(status),
       ...(fields && fields.length > 0 ? { fields } : {}),
@@ -85,6 +91,16 @@ function describeFailure(err: unknown): DescribedFailure {
     return { message: err.message };
   }
   return { message: String(err) };
+}
+
+/** ApiError lifts `request_id` onto itself; anything else may only carry it in the body. */
+function readRequestId(record: Record<string, unknown>, body: unknown): string | undefined {
+  if (typeof record.requestId === "string" && record.requestId) return record.requestId;
+  if (typeof body === "object" && body !== null) {
+    const id = (body as Record<string, unknown>).request_id;
+    if (typeof id === "string" && id) return id;
+  }
+  return undefined;
 }
 
 /**
@@ -151,6 +167,7 @@ export async function runCommand(fn: () => Promise<void>): Promise<void> {
           message: failure.message,
           ...(failure.hint ? { hint: failure.hint } : {}),
           ...(failure.fields ? { fields: failure.fields } : {}),
+          ...(failure.requestId ? { request_id: failure.requestId } : {}),
         },
       };
       outputJson(jsonError);
@@ -160,6 +177,7 @@ export async function runCommand(fn: () => Promise<void>): Promise<void> {
     if (failure.status !== undefined) {
       const label = failure.code ? `${failure.status} ${failure.code}` : `${failure.status}`;
       consola.error(`API error (${label}): ${failure.message}`);
+      if (failure.requestId) consola.log(colors.dim(`Request ID: ${failure.requestId}`));
       for (const field of failure.fields ?? []) {
         consola.log(`  ${field.field}: ${field.detail}`);
       }

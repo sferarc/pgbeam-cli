@@ -408,6 +408,8 @@ interface JsonRpcRequest {
   params?: Record<string, unknown>;
 }
 
+const SHUTDOWN_GRACE_MS = 30_000;
+
 export async function startMcpServer(args: GlobalArgs): Promise<void> {
   const tools = META_TOOLS;
   const readline = await import("node:readline");
@@ -422,7 +424,16 @@ export async function startMcpServer(args: GlobalArgs): Promise<void> {
     process.stdout.write(`${JSON.stringify(msg)}\n`);
   }
 
-  rl.on("line", async (line) => {
+  const inFlight = new Set<Promise<void>>();
+
+  rl.on("line", (line) => {
+    if (!line.trim()) return;
+    const pending = handleLine(line);
+    inFlight.add(pending);
+    void pending.catch(() => {}).finally(() => inFlight.delete(pending));
+  });
+
+  async function handleLine(line: string): Promise<void> {
     let request: JsonRpcRequest;
     try {
       request = JSON.parse(line);
@@ -430,6 +441,18 @@ export async function startMcpServer(args: GlobalArgs): Promise<void> {
       send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
       return;
     }
+    if (
+      request === null ||
+      typeof request !== "object" ||
+      Array.isArray(request) ||
+      typeof request.method !== "string"
+    ) {
+      send({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } });
+      return;
+    }
+
+    // JSON-RPC forbids replying to notifications, known or not.
+    if (request.id === undefined) return;
 
     const id = request.id;
 
@@ -445,9 +468,6 @@ export async function startMcpServer(args: GlobalArgs): Promise<void> {
             instructions: INSTRUCTIONS,
           },
         });
-        break;
-
-      case "notifications/initialized":
         break;
 
       case "ping":
@@ -513,9 +533,16 @@ export async function startMcpServer(args: GlobalArgs): Promise<void> {
           error: { code: -32601, message: `Method not found: ${request.method}` },
         });
     }
-  });
+  }
 
-  rl.on("close", () => {
-    process.exit(0);
+  rl.on("close", async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, SHUTDOWN_GRACE_MS);
+    });
+    await Promise.race([Promise.allSettled(inFlight), deadline]);
+    clearTimeout(timer);
+    // Pipe writes are async on macOS; exit only once queued replies are flushed.
+    process.stdout.write("", () => process.exit(0));
   });
 }

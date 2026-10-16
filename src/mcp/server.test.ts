@@ -105,11 +105,12 @@ function createStdioHarness() {
   const stdinEmitter = new EventEmitter();
 
   // Capture JSON lines written to stdout
-  process.stdout.write = vi.fn((chunk: string | Uint8Array) => {
+  process.stdout.write = vi.fn((chunk: string | Uint8Array, cb?: () => void) => {
     const line = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
     if (line.trim()) {
       messages.push(JSON.parse(line.trim()));
     }
+    cb?.();
     return true;
   }) as typeof process.stdout.write;
 
@@ -239,6 +240,23 @@ describe("MCP server", () => {
         jsonrpc: "2.0",
         method: "notifications/initialized",
       });
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(harness.messages.length).toBe(before);
+    });
+  });
+
+  describe("other notifications", () => {
+    it("does not respond to notifications/cancelled or unknown notifications", async () => {
+      await startAndWait();
+      const before = harness.messages.length;
+
+      harness.sendLine({
+        jsonrpc: "2.0",
+        method: "notifications/cancelled",
+        params: { requestId: 1, reason: "user" },
+      });
+      harness.sendLine({ jsonrpc: "2.0", method: "notifications/something_new" });
       await new Promise((r) => setTimeout(r, 10));
 
       expect(harness.messages.length).toBe(before);
@@ -558,6 +576,35 @@ describe("MCP server", () => {
       expect(response.error.code).toBe(-32601);
       expect(response.error.message).toContain("Method not found: unknown/method");
     });
+
+    it.each([
+      ["an empty object", "{}"],
+      ["an array", "[]"],
+      ["a number", "42"],
+      ["a non-string method", '{"jsonrpc":"2.0","id":5,"method":7}'],
+    ])("returns a single invalid request error for %s", async (_label, raw) => {
+      await startAndWait();
+      const before = harness.messages.length;
+
+      harness.stdinEmitter.emit("data", `${raw}\n`);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(harness.messages.slice(before)).toEqual([
+        { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } },
+      ]);
+    });
+  });
+
+  describe("blank lines", () => {
+    it("ignores whitespace-only lines", async () => {
+      await startAndWait();
+      const before = harness.messages.length;
+
+      harness.stdinEmitter.emit("data", "\n   \n\t\n");
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(harness.messages.length).toBe(before);
+    });
   });
 
   describe("close", () => {
@@ -568,6 +615,41 @@ describe("MCP server", () => {
       harness.stdinEmitter.emit("end");
       await new Promise((r) => setTimeout(r, 50));
 
+      expect(process.exit).toHaveBeenCalledWith(0);
+    });
+
+    it("writes the reply to a call still in flight when stdin closes", async () => {
+      let resolveRequest: (value: unknown) => void = () => {};
+      mockRawRequest.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }) as never,
+      );
+      await startAndWait();
+
+      harness.stdinEmitter.emit(
+        "data",
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: 77,
+          method: "tools/call",
+          params: {
+            name: "call_endpoint",
+            arguments: { operation_id: "getProject", path_params: { project_id: "p1" } },
+          },
+        })}\n`,
+      );
+      harness.stdinEmitter.emit("end");
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(process.exit).not.toHaveBeenCalled();
+      expect(harness.messages).toHaveLength(0);
+
+      resolveRequest({ id: "p1" });
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(harness.messages).toHaveLength(1);
+      expect(harness.messages[0]).toMatchObject({ jsonrpc: "2.0", id: 77 });
       expect(process.exit).toHaveBeenCalledWith(0);
     });
   });

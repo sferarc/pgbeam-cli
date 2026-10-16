@@ -21,6 +21,7 @@ vi.mock("../../lib/errors.js", () => ({
 
 import { readFile, writeFile } from "node:fs/promises";
 import { consola } from "consola";
+import { mcpClientConfig } from "../../lib/mcp-config.js";
 import mcpConfigCommand from "./mcp-config.js";
 
 const run = mcpConfigCommand.run;
@@ -58,7 +59,11 @@ describe("agents mcp-config", () => {
     const parsed = JSON.parse(written);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({ client: "claude", file: ".mcp.json" });
-    expect(JSON.parse(parsed[0].config)).toHaveProperty("mcpServers.pgbeam.url", URL);
+    expect(JSON.parse(parsed[0].config)).toEqual({
+      mcpServers: {
+        pgbeam: { type: "http", url: URL, headers: { Authorization: `Bearer ${TOKEN}` } },
+      },
+    });
   });
 
   it("emits all clients with --client all", async () => {
@@ -90,7 +95,15 @@ describe("agents mcp-config", () => {
       client: "claude-desktop",
       file: "claude_desktop_config.json",
     });
-    expect(JSON.parse(parsed[0].config)).toHaveProperty("mcpServers.pgbeam.command", "npx");
+    expect(JSON.parse(parsed[0].config)).toEqual({
+      mcpServers: {
+        pgbeam: {
+          command: "npx",
+          args: ["-y", "mcp-remote", URL, "--header", `Authorization:\${PGBEAM_AUTH_HEADER}`],
+          env: { PGBEAM_AUTH_HEADER: `Bearer ${TOKEN}` },
+        },
+      },
+    });
   });
 
   it.each([
@@ -175,5 +188,46 @@ describe("agents mcp-config", () => {
     await expect(
       run({ args: { ...baseArgs, url: "https://x.proxy.pgbeam.app/mcp", json: true } } as never),
     ).rejects.toThrowError(/--url plus --mcp-token/);
+  });
+});
+
+// Duplicated in frontend/apps/dashboard/lib/mcp-client-config.test.ts: the
+// dashboard must emit these exact bytes for the same url and token.
+const SHARED_URL = "https://abc.proxy.pgbeam.app/mcp";
+const SHARED_TOKEN = "pba_shared";
+const SHARED_CONFIGS = {
+  claude: `{
+  "mcpServers": {
+    "pgbeam": {
+      "type": "http",
+      "url": "https://abc.proxy.pgbeam.app/mcp",
+      "headers": {
+        "Authorization": "Bearer pba_shared"
+      }
+    }
+  }
+}`,
+  "claude-desktop": `{
+  "mcpServers": {
+    "pgbeam": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://abc.proxy.pgbeam.app/mcp",
+        "--header",
+        "Authorization:\${PGBEAM_AUTH_HEADER}"
+      ],
+      "env": {
+        "PGBEAM_AUTH_HEADER": "Bearer pba_shared"
+      }
+    }
+  }
+}`,
+} as const;
+
+describe("mcpClientConfig parity with the dashboard", () => {
+  it.each(["claude", "claude-desktop"] as const)("emits the shared %s config", (client) => {
+    expect(mcpClientConfig(client, SHARED_URL, SHARED_TOKEN)).toBe(SHARED_CONFIGS[client]);
   });
 });

@@ -16,6 +16,7 @@ vi.mock("./output.js", () => ({
 }));
 
 import { consola } from "consola";
+import { ApiError } from "pgbeam";
 import { ConfirmationDeclinedError } from "./confirm";
 import { remediationHint, runCommand } from "./errors";
 import { outputJson } from "./output.js";
@@ -23,6 +24,15 @@ import { outputJson } from "./output.js";
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+const internalProblem = {
+  type: "https://pgbeam.com/docs/api/errors/internal-error",
+  title: "Internal error",
+  status: 500,
+  detail: "internal server error",
+  code: "INTERNAL_ERROR",
+  request_id: "req_01HXYZ",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(process, "exit").mockImplementation(() => {
@@ -83,6 +93,37 @@ describe("runCommand", () => {
     );
     // The document is already fully printed, so it must not be dumped again.
     expect(consola.log).not.toHaveBeenCalled();
+  });
+
+  it("prints the request id under the error line without dumping the problem document", async () => {
+    await expect(
+      runCommand(async () => {
+        throw new ApiError(500, "Internal Server Error", internalProblem);
+      }),
+    ).rejects.toThrow("process.exit");
+
+    expect(consola.error).toHaveBeenCalledWith(
+      "API error (500 INTERNAL_ERROR): internal server error",
+    );
+    expect(consola.log).toHaveBeenCalledOnce();
+    expect(consola.log).toHaveBeenCalledWith(expect.stringContaining("Request ID: req_01HXYZ"));
+  });
+
+  it("reads the request id from the body when the error does not lift it", async () => {
+    const apiError = Object.assign(new Error("internal server error"), {
+      status: 500,
+      code: "INTERNAL_ERROR",
+      body: internalProblem,
+    });
+
+    await expect(
+      runCommand(async () => {
+        throw apiError;
+      }),
+    ).rejects.toThrow("process.exit");
+
+    expect(consola.log).toHaveBeenCalledOnce();
+    expect(consola.log).toHaveBeenCalledWith(expect.stringContaining("Request ID: req_01HXYZ"));
   });
 
   it("lists field errors under the message", async () => {
@@ -245,6 +286,24 @@ describe("runCommand", () => {
       });
       expect(consola.error).not.toHaveBeenCalled();
       expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    it("includes the request id in the error object", async () => {
+      await expect(
+        runCommand(async () => {
+          throw new ApiError(500, "Internal Server Error", internalProblem);
+        }),
+      ).rejects.toThrow("process.exit");
+
+      expect(outputJson).toHaveBeenCalledWith({
+        error: {
+          status: 500,
+          code: "INTERNAL_ERROR",
+          message: "internal server error",
+          hint: expect.stringContaining("Retry shortly"),
+          request_id: "req_01HXYZ",
+        },
+      });
     });
 
     it("emits a status-less error object for plain errors", async () => {
