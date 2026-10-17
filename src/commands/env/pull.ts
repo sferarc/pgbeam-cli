@@ -1,10 +1,14 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { confirm } from "@inquirer/prompts";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { requireProject, resolveContext } from "../../lib/client.js";
+import { confirmDestructive } from "../../lib/confirm.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
+
+// Matches `DATABASE_URL=`, `export DATABASE_URL=` and `DATABASE_URL = `, but not
+// other keys that merely end in DATABASE_URL.
+const DATABASE_URL_LINE = /^([ \t]*(?:export[ \t]+)?)DATABASE_URL[ \t]*=.*$/gm;
 
 export default defineCommand({
   meta: {
@@ -57,30 +61,29 @@ export default defineCommand({
       const databaseUrl = `postgresql://USER:PASS@${proxyHost}:5432/YOUR_DB`;
 
       const file = args.file;
-      let content = "";
+      const line = `DATABASE_URL="${databaseUrl}"`;
+      const existing = existsSync(file) ? readFileSync(file, "utf-8") : undefined;
+      let content: string;
 
-      if (existsSync(file)) {
-        content = readFileSync(file, "utf-8");
-        if (content.includes("DATABASE_URL=")) {
-          if (!args.yes) {
-            const ok = await confirm({
-              message: `${file} already contains DATABASE_URL. Overwrite?`,
-              default: false,
-            });
-            if (!ok) {
-              consola.info("Cancelled.");
-              return;
-            }
-          }
-          content = content.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL="${databaseUrl}"`);
-        } else {
-          content = `${content.trimEnd()}\nDATABASE_URL="${databaseUrl}"\n`;
-        }
+      const matches = existing?.match(DATABASE_URL_LINE)?.length ?? 0;
+      if (existing === undefined) {
+        content = `${line}\n`;
+      } else if (matches === 0) {
+        content = existing.trim() === "" ? `${line}\n` : `${existing.trimEnd()}\n${line}\n`;
       } else {
-        content = `DATABASE_URL="${databaseUrl}"\n`;
+        await confirmDestructive({
+          yes: args.yes,
+          message: `${file} already contains DATABASE_URL. Overwrite?`,
+          action: "Overwriting DATABASE_URL",
+        });
+        if (matches > 1) {
+          consola.warn(`${file} had ${matches} DATABASE_URL lines; all of them were replaced.`);
+        }
+        content = existing.replace(DATABASE_URL_LINE, (_match, prefix: string) => prefix + line);
       }
 
-      writeFileSync(file, content);
+      // The mode only applies when the file is created; an existing file keeps its own.
+      writeFileSync(file, content, { mode: 0o600 });
       consola.success(`Wrote DATABASE_URL to ${file}`);
       consola.info("Replace USER, PASS, and YOUR_DB with your upstream credentials.");
     });
