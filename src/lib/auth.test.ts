@@ -18,8 +18,11 @@ vi.mock("consola", () => ({
   },
 }));
 
+const mockLoadAuthConfig = vi.fn();
 vi.mock("./config.js", () => ({
+  loadAuthConfig: () => mockLoadAuthConfig(),
   setProfile: vi.fn(),
+  switchProfile: vi.fn(),
 }));
 
 const mockFetchOrganizations = vi.fn();
@@ -36,13 +39,14 @@ vi.mock("./orgs.js", () => ({
 import { input, password, select } from "@inquirer/prompts";
 import { consola } from "consola";
 import { loginWithApiKey, resolveLoginOrg } from "./auth";
-import { setProfile } from "./config.js";
+import { setProfile, switchProfile } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 beforeEach(() => {
   vi.clearAllMocks();
+  mockLoadAuthConfig.mockReturnValue({ currentProfile: "", profiles: {} });
   // Prevent process.exit from actually exiting
   vi.spyOn(process, "exit").mockImplementation(() => {
     throw new Error("process.exit");
@@ -123,6 +127,7 @@ describe("loginWithApiKey", () => {
     await expect(loginWithApiKey()).rejects.toThrow("process.exit");
 
     expect(setProfile).not.toHaveBeenCalled();
+    expect(switchProfile).not.toHaveBeenCalled();
     expect(consola.error).toHaveBeenCalledWith(expect.stringContaining("rejected (401)"));
     expect(process.exit).toHaveBeenCalledWith(1);
   });
@@ -203,5 +208,66 @@ describe("loginWithApiKey", () => {
     await loginWithApiKey();
 
     expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("pgbeam projects list"));
+  });
+  it("makes the stored profile active and says which profile it replaced", async () => {
+    mockLoadAuthConfig.mockReturnValue({ currentProfile: "default", profiles: {} });
+    vi.mocked(password).mockResolvedValue("tok");
+    mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme" }]);
+
+    await loginWithApiKey("staging");
+
+    expect(switchProfile).toHaveBeenCalledWith("staging");
+    expect(consola.info).toHaveBeenCalledWith(
+      'Switched active profile from "default" to "staging".',
+    );
+  });
+
+  it("activates an unverified profile too", async () => {
+    mockLoadAuthConfig.mockReturnValue({ currentProfile: "default", profiles: {} });
+    vi.mocked(password).mockResolvedValue("offline-key");
+    mockFetchOrganizations.mockRejectedValue(new TypeError("fetch failed"));
+
+    await loginWithApiKey("staging");
+
+    expect(switchProfile).toHaveBeenCalledWith("staging");
+    expect(consola.info).toHaveBeenCalledWith(
+      'Switched active profile from "default" to "staging".',
+    );
+  });
+
+  it("prints no switch message when re-logging into the active profile", async () => {
+    mockLoadAuthConfig.mockReturnValue({ currentProfile: "staging", profiles: {} });
+    vi.mocked(password).mockResolvedValue("tok");
+    mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme" }]);
+
+    await loginWithApiKey("staging");
+
+    expect(switchProfile).toHaveBeenCalledWith("staging");
+    expect(consola.info).not.toHaveBeenCalledWith(
+      expect.stringContaining("Switched active profile"),
+    );
+  });
+
+  it("prints no switch message on the first login", async () => {
+    vi.mocked(password).mockResolvedValue("tok");
+    mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme" }]);
+
+    await loginWithApiKey("default");
+
+    expect(switchProfile).toHaveBeenCalledWith("default");
+    expect(consola.info).not.toHaveBeenCalledWith(
+      expect.stringContaining("Switched active profile"),
+    );
+  });
+
+  it("switches nothing when the key is rejected with 403", async () => {
+    mockLoadAuthConfig.mockReturnValue({ currentProfile: "default", profiles: {} });
+    vi.mocked(password).mockResolvedValue("bad-key");
+    mockFetchOrganizations.mockRejectedValue({ status: 403, message: "forbidden" });
+
+    await expect(loginWithApiKey("staging")).rejects.toThrow("process.exit");
+
+    expect(setProfile).not.toHaveBeenCalled();
+    expect(switchProfile).not.toHaveBeenCalled();
   });
 });

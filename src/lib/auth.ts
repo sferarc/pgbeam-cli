@@ -1,6 +1,6 @@
 import { input, password, select } from "@inquirer/prompts";
 import { consola } from "consola";
-import { type AuthProfile, setProfile } from "./config.js";
+import { type AuthProfile, loadAuthConfig, setProfile, switchProfile } from "./config.js";
 import {
   errorStatus,
   fetchOrganizations,
@@ -77,8 +77,13 @@ export async function loginWithApiKey(profileName?: string): Promise<void> {
     ...(org ? { orgId: org.id } : {}),
   };
 
+  const previous = loadAuthConfig().currentProfile;
   setProfile(name, profile);
+  switchProfile(name);
   consola.success(`Logged in as profile "${name}".`);
+  if (previous && previous !== name) {
+    consola.info(`Switched active profile from "${previous}" to "${name}".`);
+  }
 
   if (org) {
     consola.info(`Using organization ${org.name} (${org.id}).`);

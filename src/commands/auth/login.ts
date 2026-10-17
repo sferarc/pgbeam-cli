@@ -8,7 +8,7 @@ export default defineCommand({
     description: "Authenticate with PgBeam",
     docs: {
       longDescription:
-        "Authenticate with PgBeam to access your projects and databases. Login uses an API key, which you generate from the PgBeam dashboard under Settings > API Keys; running the command prompts you to paste it. The key is verified against the API before it is stored (an invalid key fails the login), and your organization is resolved automatically: a single visible organization is selected for you, multiple organizations prompt a pick. Credentials are stored in a local profile on disk (`~/.config/pgbeam/`). You can maintain multiple profiles for different environments using the `--profile` flag.",
+        "Authenticate with PgBeam to access your projects and databases. Login uses an API key, which you generate from the PgBeam dashboard under Settings > API Keys; running the command prompts you to paste it. The key is verified against the API before it is stored (an invalid key fails the login), and your organization is resolved automatically: a single visible organization is selected for you, multiple organizations prompt a pick. Credentials are stored in a local profile on disk (`~/.config/pgbeam/`), and the profile you log into becomes the active one for subsequent commands. You can maintain multiple profiles for different environments using the `--profile` flag, and move between them with `pgbeam auth switch`.",
       examples: [
         { comment: "Login with an API key (prompts for the key)", command: "pgbeam auth login" },
         {
@@ -17,7 +17,7 @@ export default defineCommand({
         },
       ],
       response:
-        "On success, prints a confirmation with the authenticated profile name and the selected organization, ready for `pgbeam projects list`. The token is stored locally and used for all subsequent commands. A key the API rejects (401) is not stored and the command exits non-zero.",
+        "On success, prints a confirmation with the authenticated profile name and the selected organization, ready for `pgbeam projects list`. When the login replaces a different active profile, it also names the profile it switched from. The token is stored locally and used for all subsequent commands. A key the API rejects (401) is not stored and the command exits non-zero.",
     },
   },
   args: {
