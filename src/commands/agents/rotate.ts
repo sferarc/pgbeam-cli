@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { requireProject, resolveContext } from "../../lib/client.js";
+import { confirmDestructive } from "../../lib/confirm.js";
 import { runCommand } from "../../lib/errors.js";
 import { globalArgs } from "../../lib/flags.js";
 import { type McpClient, parseMcpClient } from "../../lib/mcp-config.js";
@@ -13,16 +14,19 @@ export default defineCommand({
     description: "Rotate an agent credential's secrets",
     docs: {
       longDescription:
-        "Generate a new Postgres password and MCP token for an existing credential, keeping its id, username, name, and policy. Connections using the old password are dropped within seconds. The new secrets are shown once and cannot be retrieved again, so update your agent before its next call. A ready-to-paste MCP client config is printed alongside the secrets.",
+        "Generate a new Postgres password and MCP token for an existing credential, keeping its id, username, name, and policy. Connections using the old password are dropped within seconds. The new secrets are shown once and cannot be retrieved again, so update your agent before its next call. A ready-to-paste MCP client config is printed alongside the secrets. The old secrets cannot be restored, so a confirmation prompt is shown unless `--yes` is passed.",
       examples: [
-        { comment: "Rotate a credential's secrets", command: "pgbeam agents rotate agt_xxx" },
+        {
+          comment: "Rotate a credential's secrets (with confirmation)",
+          command: "pgbeam agents rotate agt_xxx",
+        },
         {
           comment: "Rotate and emit a VS Code MCP config",
           command: "pgbeam agents rotate agt_xxx --client vscode",
         },
         {
-          comment: "Rotate and capture secrets as JSON",
-          command: "pgbeam agents rotate agt_xxx --json",
+          comment: "Rotate without confirmation and capture secrets as JSON (CI/CD)",
+          command: "pgbeam agents rotate agt_xxx --yes --json",
         },
       ],
       response:
@@ -38,6 +42,12 @@ export default defineCommand({
         "MCP client to emit config for: claude (default), claude-desktop, cursor, vscode, cline, windsurf, or all",
       default: "claude",
     },
+    yes: {
+      type: "boolean",
+      alias: "y",
+      description: "Skip the confirmation prompt (useful for scripts and CI/CD)",
+      default: false,
+    },
   },
   async run({ args }) {
     await runCommand(async () => {
@@ -45,6 +55,12 @@ export default defineCommand({
       const projectId = requireProject(ctx);
       const client: McpClient | undefined =
         args.client === "all" ? undefined : parseMcpClient(args.client);
+
+      await confirmDestructive({
+        yes: args.yes,
+        action: "Rotate",
+        message: `Rotate agent credential ${args.id}? Its current password and MCP token stop working within seconds and cannot be restored.`,
+      });
 
       const result = await ctx.client.agents.rotateAgentCredential({
         pathParams: { project_id: projectId, agent_id: args.id },
