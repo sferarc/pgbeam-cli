@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./stdin.js", () => ({
+  readStdin: vi.fn(),
+}));
+
 import {
   insightRanges,
   optionalArg,
@@ -7,9 +12,11 @@ import {
   parseNumber,
   poolModes,
   requireArg,
+  resolveSecretArg,
   sslModes,
   typedEntries,
 } from "./args.js";
+import { readStdin } from "./stdin.js";
 
 describe("requireArg", () => {
   it("returns the string when given a valid non-empty string", () => {
@@ -302,5 +309,35 @@ describe("constants", () => {
         expect(key).toBe(value);
       }
     });
+  });
+});
+
+describe("resolveSecretArg", () => {
+  it("returns --secret when stdin is not requested", async () => {
+    expect(await resolveSecretArg("s3cr3t", false)).toBe("s3cr3t");
+    expect(await resolveSecretArg(undefined, false)).toBeUndefined();
+    expect(readStdin).not.toHaveBeenCalled();
+  });
+
+  it("trims exactly one trailing newline from stdin", async () => {
+    vi.mocked(readStdin).mockResolvedValueOnce("abc\n\n");
+    expect(await resolveSecretArg(undefined, true)).toBe("abc\n");
+
+    vi.mocked(readStdin).mockResolvedValueOnce("abc\r\n");
+    expect(await resolveSecretArg(undefined, true)).toBe("abc");
+
+    vi.mocked(readStdin).mockResolvedValueOnce(" abc ");
+    expect(await resolveSecretArg(undefined, true)).toBe(" abc ");
+  });
+
+  it("rejects an empty secret", async () => {
+    vi.mocked(readStdin).mockResolvedValueOnce("\n");
+    await expect(resolveSecretArg(undefined, true)).rejects.toThrow(/empty secret/);
+  });
+
+  it("rejects combining --secret with --secret-stdin", async () => {
+    vi.mocked(readStdin).mockClear();
+    await expect(resolveSecretArg("x", true)).rejects.toThrow(/not both/);
+    expect(readStdin).not.toHaveBeenCalled();
   });
 });

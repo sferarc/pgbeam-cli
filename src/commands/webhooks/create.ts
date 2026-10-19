@@ -6,7 +6,7 @@ import type {
   WebhookEndpointInputFormatEnumKey,
   WebhookEventTypeKey,
 } from "pgbeam";
-import { optionalArg, parseEnum } from "../../lib/args.js";
+import { optionalArg, parseEnum, resolveSecretArg } from "../../lib/args.js";
 
 /** Webhook delivery format enum values matching the SDK type. */
 const webhookFormats = {
@@ -65,8 +65,9 @@ export default defineCommand({
             "pgbeam webhooks create https://example.com/hook --format datadog --event query_blocked,canary_tripped",
         },
         {
-          comment: "Create a disabled webhook with a secret",
-          command: "pgbeam webhooks create https://example.com/hook --secret s3cr3t --disabled",
+          comment: "Create a disabled webhook with a signing secret read from stdin",
+          command:
+            'printf %s "$SECRET" | pgbeam webhooks create https://example.com/hook --secret-stdin --disabled',
         },
       ],
       response:
@@ -91,7 +92,13 @@ export default defineCommand({
     },
     secret: {
       type: "string",
-      description: "Shared secret used to sign webhook payloads.",
+      description:
+        "Shared secret used to sign webhook payloads. Visible in shell history and the process list; prefer `--secret-stdin`.",
+    },
+    "secret-stdin": {
+      type: "boolean",
+      description: "Read the signing secret from stdin. One trailing newline is removed.",
+      default: false,
     },
     description: {
       type: "string",
@@ -108,6 +115,10 @@ export default defineCommand({
       const ctx = resolveContext(args);
       const projectId = requireProject(ctx);
 
+      if (args["secret-stdin"] && optionalArg(args.url) === undefined) {
+        throw new Error("Pass the webhook URL as an argument when using --secret-stdin");
+      }
+      const secret = await resolveSecretArg(args.secret, args["secret-stdin"]);
       const url = optionalArg(args.url) ?? (await input({ message: "Webhook URL:" }));
 
       const eventTypes = optionalArg(args.event)
@@ -116,7 +127,6 @@ export default defineCommand({
         .filter((e) => e.length > 0)
         .map((e) => parseEnum(e, webhookEventTypes, "event"));
 
-      const secret = optionalArg(args.secret);
       const description = optionalArg(args.description);
 
       const body: WebhookEndpointInput = {

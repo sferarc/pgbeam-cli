@@ -5,7 +5,7 @@ import type {
   WebhookEndpointInputFormatEnumKey,
   WebhookEventTypeKey,
 } from "pgbeam";
-import { optionalArg, parseEnum, requireArg } from "../../lib/args.js";
+import { optionalArg, parseEnum, requireArg, resolveSecretArg } from "../../lib/args.js";
 
 /** Webhook delivery format enum values matching the SDK type. */
 const webhookFormats = {
@@ -62,6 +62,10 @@ export default defineCommand({
           command: "pgbeam webhooks update wh_xxx --event query_blocked,canary_tripped",
         },
         { comment: "Disable a webhook", command: "pgbeam webhooks update wh_xxx --enabled=false" },
+        {
+          comment: "Rotate a webhook's signing secret from stdin",
+          command: 'printf %s "$SECRET" | pgbeam webhooks update wh_xxx --secret-stdin',
+        },
       ],
       response:
         "Prints a success message confirming the webhook was updated. With `--json`, returns the full updated webhook object from the API.",
@@ -88,7 +92,13 @@ export default defineCommand({
     },
     secret: {
       type: "string",
-      description: "New shared secret used to sign webhook payloads.",
+      description:
+        "New shared secret used to sign webhook payloads. Visible in shell history and the process list; prefer `--secret-stdin`.",
+    },
+    "secret-stdin": {
+      type: "boolean",
+      description: "Read the signing secret from stdin. One trailing newline is removed.",
+      default: false,
     },
     description: {
       type: "string",
@@ -105,27 +115,29 @@ export default defineCommand({
       const projectId = requireProject(ctx);
       const webhookId = requireArg(args.id, "webhook ID");
 
-      // Fetch current endpoint to merge with user-provided values.
-      const current = await ctx.client.webhooks.getWebhookEndpoint({
-        pathParams: { project_id: projectId, webhook_id: webhookId },
-      });
-
       const url = optionalArg(args.url);
       const format = optionalArg(args.format);
-      const secret = optionalArg(args.secret);
+      const parsedFormat = format ? parseEnum(format, webhookFormats, "format") : undefined;
       const description = optionalArg(args.description);
       const eventTypes = optionalArg(args.event)
         ?.split(",")
         .map((e) => e.trim())
         .filter((e) => e.length > 0)
         .map((e) => parseEnum(e, webhookEventTypes, "event"));
+      const secret = await resolveSecretArg(args.secret, args["secret-stdin"]);
+
+      // PUT replaces the endpoint, so carry over every field the user did not pass.
+      const current = await ctx.client.webhooks.getWebhookEndpoint({
+        pathParams: { project_id: projectId, webhook_id: webhookId },
+      });
 
       const body: WebhookEndpointInput = {
         url: url ?? current.url,
-        format: format ? parseEnum(format, webhookFormats, "format") : current.format,
+        format: parsedFormat ?? current.format,
         event_types: eventTypes ?? current.event_types,
         enabled: args.enabled !== undefined ? args.enabled : current.enabled,
       };
+      // Omitting the secret keeps the stored one; the API never returns it.
       if (secret) body.secret = secret;
       if (description !== undefined) {
         body.description = description;

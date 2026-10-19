@@ -32,9 +32,14 @@ vi.mock("../../lib/output.js", async (importOriginal) => ({
   }),
 }));
 
+vi.mock("../../lib/stdin.js", () => ({
+  readStdin: vi.fn(),
+}));
+
 import { input } from "@inquirer/prompts";
 import { consola } from "consola";
 import { requireProject, resolveContext } from "../../lib/client.js";
+import { readStdin } from "../../lib/stdin.js";
 import createCommand from "./create.js";
 
 // ---------------------------------------------------------------------------
@@ -163,5 +168,60 @@ describe("webhooks create", () => {
     } as never);
 
     expect(output).toHaveBeenCalledWith(result, true, expect.any(Function));
+  });
+
+  it("reads the secret from stdin with --secret-stdin", async () => {
+    vi.mocked(readStdin).mockResolvedValue("piped-secret\n");
+    mockClient.webhooks.createWebhookEndpoint.mockResolvedValue({
+      id: "wh-5",
+      url: "https://example.com/hook",
+    });
+
+    await createCommand.run?.({
+      args: buildArgs({ url: "https://example.com/hook", "secret-stdin": true }),
+    } as never);
+
+    expect(mockClient.webhooks.createWebhookEndpoint).toHaveBeenCalledWith({
+      pathParams: { project_id: "proj-1" },
+      body: {
+        url: "https://example.com/hook",
+        format: "json",
+        enabled: true,
+        secret: "piped-secret",
+      },
+    });
+  });
+
+  it("rejects --secret combined with --secret-stdin", async () => {
+    await expect(
+      createCommand.run?.({
+        args: buildArgs({ url: "https://example.com/hook", secret: "x", "secret-stdin": true }),
+      } as never),
+    ).rejects.toThrow(/not both/);
+
+    expect(readStdin).not.toHaveBeenCalled();
+    expect(mockClient.webhooks.createWebhookEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty secret on stdin", async () => {
+    vi.mocked(readStdin).mockResolvedValue("");
+
+    await expect(
+      createCommand.run?.({
+        args: buildArgs({ url: "https://example.com/hook", "secret-stdin": true }),
+      } as never),
+    ).rejects.toThrow(/empty secret/);
+
+    expect(mockClient.webhooks.createWebhookEndpoint).not.toHaveBeenCalled();
+  });
+
+  // Stdin carries the secret, so it cannot also answer the URL prompt.
+  it("requires the URL argument with --secret-stdin instead of prompting", async () => {
+    await expect(
+      createCommand.run?.({ args: buildArgs({ "secret-stdin": true }) } as never),
+    ).rejects.toThrow(/URL as an argument/);
+
+    expect(input).not.toHaveBeenCalled();
+    expect(readStdin).not.toHaveBeenCalled();
   });
 });

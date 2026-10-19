@@ -1,4 +1,5 @@
 import type { SSLModeKey } from "pgbeam";
+import { readStdin } from "./stdin.js";
 
 /** Require a string argument, throw if missing. */
 export function requireArg(value: string | boolean | undefined, name: string): string {
@@ -11,6 +12,26 @@ export function requireArg(value: string | boolean | undefined, name: string): s
 /** Coerce an optional arg to string or undefined (never boolean). */
 export function optionalArg(value: string | boolean | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * Resolve a signing secret given as `--secret` or piped through `--secret-stdin`.
+ * Stdin keeps the value out of shell history and the process list.
+ */
+export async function resolveSecretArg(
+  secret: string | boolean | undefined,
+  secretStdin: boolean | undefined,
+): Promise<string | undefined> {
+  const fromFlag = optionalArg(secret);
+  if (!secretStdin) return fromFlag;
+  if (fromFlag !== undefined) {
+    throw new Error("Use either --secret or --secret-stdin, not both");
+  }
+  const value = (await readStdin()).replace(/\r?\n$/, "");
+  if (!value) {
+    throw new Error("--secret-stdin read an empty secret");
+  }
+  return value;
 }
 
 /** Typed Object.entries that preserves key type for const objects. */
