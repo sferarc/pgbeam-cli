@@ -1,4 +1,5 @@
 import { type ApiClient, ApiError, PgBeamClient } from "pgbeam";
+import { buildApiUrl } from "./api-url.js";
 import { getCurrentProfile, getProfile } from "./config.js";
 import type { GlobalArgs } from "./flags.js";
 import { loadProjectLink } from "./project.js";
@@ -200,21 +201,7 @@ export async function rawRequest(
     );
   }
 
-  let url = path;
-  if (options?.pathParams) {
-    for (const [key, value] of Object.entries(options.pathParams)) {
-      url = url.replace(`{${key}}`, encodeURIComponent(value));
-    }
-  }
-
-  const baseUrl = apiBaseUrl();
-  const fullUrl = new URL(url, baseUrl);
-
-  if (options?.queryParams) {
-    for (const [key, value] of Object.entries(options.queryParams)) {
-      fullUrl.searchParams.set(key, value);
-    }
-  }
+  const fullUrl = buildApiUrl(apiBaseUrl(), path, options?.pathParams, options?.queryParams);
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,

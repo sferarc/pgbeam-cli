@@ -504,3 +504,54 @@ describe("rawRequest", () => {
     });
   });
 });
+
+describe("rawRequest origin and path guards", () => {
+  const tok = { ...defaultArgs, token: "tok" };
+
+  it.each([
+    ["absolute URL", "https://evil.example/x"],
+    ["protocol-relative URL", "//evil.example/x"],
+    ["backslash path", "/\\evil.example/x"],
+    ["relative path without a leading slash", "v1/regions"],
+    ["dot segment", "/v1/projects/../regions"],
+    ["encoded dot segment", "/v1/projects/%2e%2e/regions"],
+  ])("refuses a %s without calling fetch", async (_label, path) => {
+    await expect(rawRequest(tok, "GET", path)).rejects.toThrow(/Refusing API path/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["..", ".."],
+    [".", "."],
+    ["%2e%2e", "%2e%2e"],
+    ["%2E%2E", "%2E%2E"],
+    ["a/b", "a/b"],
+    ["%2F", "a%2Fb"],
+    ["empty", ""],
+  ])("refuses path param %s without calling fetch", async (_label, value) => {
+    await expect(
+      rawRequest(tok, "DELETE", "/v1/projects/{project_id}/databases/{database_id}", {
+        pathParams: { project_id: "prj_x", database_id: value },
+      }),
+    ).rejects.toThrow(/Refusing path parameter database_id/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("still resolves a normal route on the API origin with query params", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: new Headers({ "content-type": "application/json" }),
+      json: () => Promise.resolve({}),
+    } as unknown as Response);
+
+    await rawRequest(tok, "GET", "/v1/projects/{project_id}/databases/{database_id}", {
+      pathParams: { project_id: "prj_x", database_id: "db_y" },
+      queryParams: { limit: "5" },
+    });
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe("https://api.pgbeam.com/v1/projects/prj_x/databases/db_y?limit=5");
+  });
+});

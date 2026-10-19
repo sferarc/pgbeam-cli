@@ -525,6 +525,22 @@ describe("MCP server", () => {
       expect(response.result.content[0].text).toContain("unknown operation_id");
     });
 
+    it("refuses a dot-segment path param before any request is sent", async () => {
+      const actual = await vi.importActual<typeof import("../lib/client.js")>("../lib/client.js");
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+      mockRawRequest.mockImplementationOnce(actual.rawRequest);
+      await startAndWait();
+      const response = await call(
+        { operation_id: "getDatabase", path_params: { project_id: "proj_123", database_id: ".." } },
+        48,
+      );
+      vi.unstubAllGlobals();
+      expect(response.result.isError).toBe(true);
+      expect(response.result.content[0].text).toContain("Refusing path parameter database_id");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
     it("surfaces rawRequest failures as an error result", async () => {
       mockRawRequest.mockRejectedValue(new Error("401 Unauthorized"));
       await startAndWait();

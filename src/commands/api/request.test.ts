@@ -135,4 +135,18 @@ describe("api request", () => {
       expect.anything(),
     );
   });
+
+  it("refuses a matched route whose path param is a dot segment, without fetching", async () => {
+    const actual =
+      await vi.importActual<typeof import("../../lib/client.js")>("../../lib/client.js");
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    vi.mocked(rawRequest).mockImplementationOnce(actual.rawRequest);
+
+    await expect(
+      runHandler({ method: "GET", path: "/v1/projects/..", token: "tok" }),
+    ).rejects.toThrow(/Refusing path parameter project_id/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
