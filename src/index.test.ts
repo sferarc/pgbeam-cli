@@ -123,6 +123,7 @@ describe("CLI main entry (index.ts)", () => {
       "approvals",
       "anomalies",
       "honeytokens",
+      "templates",
       "webhooks",
       "branches",
       "migrations",

@@ -3103,4 +3103,168 @@ export const commandManifest: GeneratedCommand[] = [
       ],
     },
   },
+  {
+    command: ["templates", "delete"],
+    aliases: ["rm"],
+    operationId: "deleteQueryTemplate",
+    route: "DELETE /v1/projects/{project_id}/query-templates/{query_template_id}",
+    method: "DELETE",
+    path: "/v1/projects/{project_id}/query-templates/{query_template_id}",
+    summary: "Delete a query template",
+    description:
+      "Removes the template, so a profile that runs templates only stops\nadmitting its statement. Deleting the last template is allowed: such a\nprofile then admits nothing, which is the intended way to withdraw\naccess in an incident.\n",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "query_template_id",
+        source: "positional",
+        description: "Unique query template identifier (prefixed, e.g. qtp_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: true,
+    output: {
+      kind: "message",
+    },
+  },
+  {
+    command: ["templates", "list"],
+    aliases: ["ls"],
+    operationId: "listQueryTemplates",
+    route: "GET /v1/projects/{project_id}/query-templates",
+    method: "GET",
+    path: "/v1/projects/{project_id}/query-templates",
+    summary: "List query templates",
+    description: "Lists the project's query templates, including disabled ones.",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+    ],
+    positionalName: null,
+    positionalRequired: false,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: true,
+    destructive: false,
+    output: {
+      kind: "list",
+      listField: "query_templates",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "statement_kind",
+          label: "Statement Kind",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "include_sql",
+          label: "Include Sql",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
+  {
+    command: ["templates", "show"],
+    aliases: ["inspect"],
+    operationId: "getQueryTemplate",
+    route: "GET /v1/projects/{project_id}/query-templates/{query_template_id}",
+    method: "GET",
+    path: "/v1/projects/{project_id}/query-templates/{query_template_id}",
+    summary: "Get a query template",
+    description: "Returns a single query template by ID.",
+    pathParams: [
+      {
+        name: "project_id",
+        source: "project",
+        description: "Unique project identifier (prefixed, e.g. prj_xxx).",
+      },
+      {
+        name: "query_template_id",
+        source: "positional",
+        description: "Unique query template identifier (prefixed, e.g. qtp_xxx).",
+      },
+    ],
+    positionalName: "id",
+    positionalRequired: true,
+    injectedQuery: [],
+    flags: [],
+    hasBody: false,
+    paginated: false,
+    destructive: false,
+    output: {
+      kind: "detail",
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+        },
+        {
+          key: "name",
+          label: "Name",
+        },
+        {
+          key: "created_at",
+          label: "Created At",
+          date: true,
+        },
+        {
+          key: "project_id",
+          label: "Project ID",
+        },
+        {
+          key: "description",
+          label: "Description",
+        },
+        {
+          key: "sql",
+          label: "Sql",
+        },
+        {
+          key: "statement_kind",
+          label: "Statement Kind",
+        },
+        {
+          key: "include_sql",
+          label: "Include Sql",
+        },
+        {
+          key: "enabled",
+          label: "Enabled",
+        },
+        {
+          key: "updated_at",
+          label: "Updated At",
+          date: true,
+        },
+      ],
+    },
+  },
 ];

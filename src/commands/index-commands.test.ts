@@ -27,6 +27,7 @@ import platformCommand from "./platform/index.js";
 import policiesCommand from "./policies/index.js";
 import projectsCommand from "./projects/index.js";
 import replicasCommand from "./replicas/index.js";
+import templatesCommand from "./templates/index.js";
 import webhooksCommand from "./webhooks/index.js";
 
 /**
@@ -59,6 +60,7 @@ const commands: Record<string, Record<string, unknown>> = {
   policies: policiesCommand,
   projects: projectsCommand,
   replicas: replicasCommand,
+  templates: templatesCommand,
   webhooks: webhooksCommand,
 };
 
@@ -93,6 +95,7 @@ const expectedMeta: Record<string, { name: string; description: string }> = {
   policies: { name: "policies", description: "Manage agent policy profiles" },
   projects: { name: "projects", description: "Manage projects" },
   replicas: { name: "replicas", description: "Manage read replicas" },
+  templates: { name: "templates", description: "Manage pre-approved query templates" },
   webhooks: { name: "webhooks", description: "Manage event/audit webhook endpoints" },
 };
 
@@ -174,12 +177,13 @@ const expectedSubCommands: Record<string, string[]> = {
     "env",
   ],
   replicas: ["list", "ls", "add", "create", "delete", "rm"],
+  templates: ["list", "ls", "create", "add", "show", "inspect", "update", "delete", "rm"],
   webhooks: ["list", "ls", "create", "show", "inspect", "update", "delete", "rm", "test"],
 };
 
 describe("command index files", () => {
   it("calls defineCommand for every command module", () => {
-    expect(defineCommandCalls).toBe(22);
+    expect(defineCommandCalls).toBe(23);
   });
 
   for (const [key, command] of Object.entries(commands)) {

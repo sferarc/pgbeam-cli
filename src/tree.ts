@@ -30,6 +30,7 @@ export const subCommands: SubCommands = {
   approvals: () => import("./commands/approvals/index.js").then((m) => m.default),
   anomalies: () => import("./commands/anomalies/index.js").then((m) => m.default),
   honeytokens: () => import("./commands/honeytokens/index.js").then((m) => m.default),
+  templates: () => import("./commands/templates/index.js").then((m) => m.default),
   webhooks: () => import("./commands/webhooks/index.js").then((m) => m.default),
   branches: () => import("./commands/branches/index.js").then((m) => m.default),
   migrations: () => import("./commands/migrations/index.js").then((m) => m.default),
