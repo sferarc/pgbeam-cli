@@ -1,5 +1,59 @@
 # @pgbeam/cli
 
+## 0.5.1
+
+### Patch Changes
+
+- 796f4a7: Policy profiles carry `query_mode` (`sql` or `templates`). A profile set to `templates` admits only the project's enabled query templates, and every other rule on the profile still applies to what a template runs. Setting `templates` is refused when the project has no enabled template, and while the organization has a live self-hosted enrollment. On update, an omitted `query_mode` keeps the stored mode. In Terraform, Crossplane and Pulumi, removing `query_mode` from a config plans `sql`, and the plan shows that change.
+- Updated dependencies [796f4a7]
+  - pgbeam@0.7.0
+
+## 0.5.0
+
+### Minor Changes
+
+- 400eade: Remove `sandbox` from `--write-mode` on `pgbeam policies create` and `pgbeam policies update`. Sandbox write mode has been withdrawn; use `rollback` for writes that must never persist.
+
+### Patch Changes
+
+- Updated dependencies [5dbe64b]
+- Updated dependencies [b2fdcfd]
+- Updated dependencies [21e87a0]
+- Updated dependencies [d651ca6]
+- Updated dependencies [ca0bb93]
+  - pgbeam@0.6.0
+
+## 0.4.0
+
+### Minor Changes
+
+- 143be99: Add `pgbeam templates` to manage a project's query templates: `list`, `show` and `delete`, plus `create` and `update`, which take the statement from `--sql` or `--sql-file` (`-` reads stdin) and one `--param name:type[:null]` per placeholder, in order. A parameter type outside the API's ten is refused before any request. Nothing restricts a credential to templates yet: the policy profile setting that does arrives in a later release.
+
+### Patch Changes
+
+- 5e44855: `pgbeam agents inspect` now reports COPY as blocked in every access mode, matching the proxy, which refuses COPY for agent credentials before any statement rule applies. It previously showed COPY as allowed on a read-write credential.
+- 8728717: `pgbeam agents rotate` now asks for confirmation before rotating, since the old password and MCP token stop working within seconds and cannot be restored. Scripts and CI must pass `--yes` (or `-y`); without it, a non-interactive run fails with exit code 1 and leaves the credential untouched.
+- d1add28: Write `auth.json` atomically through a temp file and rename, tighten an existing config file to 0600 and its directory to 0700, and move a corrupted `auth.json` aside to `auth.json.corrupt-<timestamp>` instead of overwriting it with an empty config.
+- 102e7f0: `auth status`, `whoami` and `doctor` now report the organization commands actually target when the credential comes from `--token` or `PGBEAM_API_KEY`, show where it came from, and warn when it was taken from a stored profile.
+- 289e80c: `pgbeam env pull` now recognises `export DATABASE_URL=` and `DATABASE_URL = ` lines and replaces them in place instead of appending a second one, no longer prompts or claims success when the file only has a key such as `DIRECT_DATABASE_URL`, fails with a `--yes` hint in non-interactive shells instead of an inquirer error, and creates a new `.env` readable only by its owner.
+- 85005fa: `pgbeam audit export --output` and `pgbeam account export --file` now write the file with mode 0600 and replace it in one step, so an export is never world-readable and an interrupted write never leaves a truncated file behind.
+- ddfcdf8: Make the profile you log into with `pgbeam auth login` the active one. Logging into a new profile on a machine that already had one stored the credentials but left the old profile active, so the next command ran against the previous organization. The CLI now also says when it switched the active profile.
+- 785927e: `pgbeam mcp` no longer answers JSON-RPC notifications such as `notifications/cancelled`, returns `-32600 Invalid Request` for messages that are not an object with a string `method`, ignores blank lines, and finishes writing replies to in-flight tool calls before exiting when stdin closes.
+- 38c55f8: Escape terminal control characters in human-readable output. Audit SQL, credential names, webhook descriptions and other API values are written by agents, and an escape sequence in one of them could rewrite or hide lines in the operator's terminal. ESC, other C0 controls, DEL and C1 controls now print as a visible `\xNN` escape in tables, key/value views and the `audit session`, `agents inspect`, `agents usage` and `webhooks show` detail views. `--json` output is unchanged.
+- 0abb624: `pgbeam api request` and the stdio MCP `call_endpoint` tool now refuse a path that is a full URL, protocol-relative, or uses backslashes, so your API key is never sent to another host. They also refuse `.`, `..`, empty, or slash-containing path parameters (including encoded forms like `%2e%2e`), which could otherwise turn a request into a different route than the one named.
+- 9546701: API errors now print the request ID on a line under the error, and `--json` error objects include it as `request_id`, so a failure can be quoted when contacting support.
+- 90a8761: `pgbeam update` checks stable downloads against the release's SHA256SUMS and refuses to install on a mismatch or a missing entry. It now stages the new binary beside the installed one, so it works when /tmp is on another filesystem, and network requests time out instead of hanging. Dev builds warn that they are unverified and need `--yes` or a confirmation.
+- 7adb058: Add `--secret-stdin` to `pgbeam webhooks create` and `pgbeam webhooks update` so a signing secret can be piped in instead of passed on argv, where it lands in shell history and is visible to other local users in `ps`. One trailing newline is removed, an empty secret is rejected, and combining it with `--secret` is an error. `webhooks update` now validates `--event`, `--format` and the secret before fetching the endpoint. Writing tests for the update merge found no bug: unspecified fields, including description and event types, are carried over and an omitted secret keeps the stored one.
+- 876cb6a: `agents mcp-config --client claude` now emits `"type": "http"`. Claude Code reads a `url` entry without a type as a stdio server and skips it, so the previous config never connected.
+- Updated dependencies [ba058a7]
+- Updated dependencies [acb171b]
+- Updated dependencies [f363bd7]
+- Updated dependencies [94466c2]
+- Updated dependencies [958f25c]
+- Updated dependencies [6cd15fe]
+- Updated dependencies [289e0d3]
+  - pgbeam@0.5.0
+
 ## 0.3.15
 
 ### Patch Changes

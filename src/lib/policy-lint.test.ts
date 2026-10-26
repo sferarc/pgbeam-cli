@@ -171,14 +171,14 @@ describe("lintPolicy", () => {
         access_mode: "read_only",
         max_rows: 10,
         budget_queries_per_day: 1,
-        write_mode: "sandbox",
+        write_mode: "rollback",
         approval_mode: "all",
         max_affected_rows: 5,
       },
       "write-settings-on-readonly",
     );
     expect(finding?.severity).toBe("info");
-    expect(finding?.message).toContain("write_mode=sandbox");
+    expect(finding?.message).toContain("write_mode=rollback");
     expect(finding?.message).toContain("approval_mode=all");
     expect(finding?.message).toContain("max_affected_rows");
   });

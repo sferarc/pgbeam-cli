@@ -39,6 +39,7 @@ if (!run) throw new Error("command.run is not defined");
 
 const mockGetAgentCredential = vi.fn();
 const mockGetPolicyProfile = vi.fn();
+const mockGetPolicyStatementKinds = vi.fn();
 const baseArgs = { json: false, "no-color": false, debug: false };
 
 function loggedText(): string {
@@ -54,7 +55,10 @@ describe("agents inspect", () => {
     vi.mocked(resolveContext).mockReturnValue({
       client: {
         agents: { getAgentCredential: mockGetAgentCredential },
-        policies: { getPolicyProfile: mockGetPolicyProfile },
+        policies: {
+          getPolicyProfile: mockGetPolicyProfile,
+          getPolicyStatementKinds: mockGetPolicyStatementKinds,
+        },
       } as never,
       orgId: "org_123",
       projectId: "prj_linked",
@@ -76,6 +80,14 @@ describe("agents inspect", () => {
       max_rows: 100,
       budget_queries_per_hour: 200,
     });
+    mockGetPolicyStatementKinds.mockResolvedValue({
+      policy_id: "pol_1",
+      access_mode: "read_only",
+      statement_kinds: [
+        { kind: "select", allowed: true },
+        { kind: "update", allowed: false, rule: "read_only", reason: "read-only" },
+      ],
+    });
   });
 
   it("fetches the credential and the policy attached to it", async () => {
@@ -85,6 +97,9 @@ describe("agents inspect", () => {
       pathParams: { project_id: "prj_linked", agent_id: "agt_1" },
     });
     expect(mockGetPolicyProfile).toHaveBeenCalledWith({
+      pathParams: { project_id: "prj_linked", policy_id: "pol_1" },
+    });
+    expect(mockGetPolicyStatementKinds).toHaveBeenCalledWith({
       pathParams: { project_id: "prj_linked", policy_id: "pol_1" },
     });
   });
@@ -117,5 +132,6 @@ describe("agents inspect", () => {
       /no policy profile attached/,
     );
     expect(mockGetPolicyProfile).not.toHaveBeenCalled();
+    expect(mockGetPolicyStatementKinds).not.toHaveBeenCalled();
   });
 });

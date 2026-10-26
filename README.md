@@ -65,7 +65,6 @@ Every command takes `--json` for machine-readable output.
 - `pgbeam replicas` manage read replicas
 - `pgbeam domains` manage custom proxy domains
 - `pgbeam cache-rules` set query cache rules
-- `pgbeam branches` list and discard ephemeral database sandbox branches
 - `pgbeam env pull` write a project's connection details into a `.env` file
 
 **Agents, policy, and audit**

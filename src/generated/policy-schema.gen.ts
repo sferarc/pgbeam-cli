@@ -150,5 +150,9 @@ export const policyProfileInputSchema: PolicySchemaNode = {
       type: "integer",
       minimum: 0,
     },
+    query_mode: {
+      type: "string",
+      enum: ["sql", "templates"],
+    },
   },
 };

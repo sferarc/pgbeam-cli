@@ -14,7 +14,7 @@ import {
 } from "../../lib/policy.js";
 
 const accessModes = { read_only: "read_only", read_write: "read_write" } as const;
-const writeModes = { normal: "normal", rollback: "rollback", sandbox: "sandbox" } as const;
+const writeModes = { normal: "normal", rollback: "rollback" } as const;
 const approvalModes = { off: "off", writes: "writes", ddl: "ddl", all: "all" } as const;
 const migrationSafetyModes = { off: "off", warn: "warn", block: "block" } as const;
 
@@ -80,7 +80,7 @@ export default defineCommand({
     mode: { type: "string", description: "Access mode: read_only or read_write" },
     "write-mode": {
       type: "string",
-      description: "How writes are handled: normal, rollback, or sandbox",
+      description: "How writes are handled: normal or rollback",
     },
     "approval-mode": {
       type: "string",

@@ -165,8 +165,7 @@ export function lintPolicy(p: LintablePolicy): LintFinding[] {
       severity: "warning",
       message:
         "Writes commit directly (write_mode normal) with no max_affected_rows cap and no approval_mode: a single UPDATE or DELETE can modify unlimited rows.",
-      suggestion:
-        "Set max_affected_rows, use write_mode rollback or sandbox, or enable approval_mode.",
+      suggestion: "Set max_affected_rows, use write_mode rollback, or enable approval_mode.",
     });
   }
 

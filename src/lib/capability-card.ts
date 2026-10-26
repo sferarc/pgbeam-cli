@@ -1,27 +1,15 @@
 /**
  * Credential capability card: what an agent credential can actually do, worked
- * out from the credential record plus the policy profile attached to it.
+ * out from the credential record, the policy profile attached to it, and the
+ * statement-kind verdicts the control plane computes for that policy.
  *
- * Reading those two records side by side is not enough, because the data plane
- * resolves them against each other in a fixed order and a policy field can be
- * inert. The rules encoded here are transcribed from
- * `backend/services/proxy/policy/policy.go`, and the statement-kind verdicts
- * are pinned to it by `policy/testdata/statement_kind_verdicts.json`:
+ * The verdicts come from `GET .../policies/{id}/statement-kinds`, which asks the
+ * data plane's own policy engine, so the precedence rules (COPY refused by a
+ * floor, deny beats allow, read_only as a ceiling, unclassified kinds failing
+ * closed) live in Go only. Everything else here is read off the two records:
+ * budgets, caps and timeouts gate on `> 0`, so 0 or unset means unlimited.
  *
- *  - COPY is refused in every access mode by a floor that runs before
- *    statement_rules, so no allowlist entry permits it;
- *  - statement-kind deny beats allow, and a non-empty allow blocks every kind
- *    not listed;
- *  - `other` (a statement the analyzer could not classify) is refused unless it
- *    is explicitly allowlisted, in every access mode;
- *  - access_mode is a ceiling: a read_only credential refuses every write kind
- *    even when statement_rules.allow names it, and permits only select, show,
- *    explain and transaction unless another kind is explicitly allowlisted;
- *  - the denylist beats the allowlist, and a non-empty allowlist makes every
- *    unlisted relation unreachable;
- *  - budgets, caps and timeouts gate on `> 0`, so 0 or unset means unlimited.
- *
- * Pure and offline: the caller fetches the two records, this builds the card
+ * Pure and offline: the caller fetches the three records, this builds the card
  * and renders it. The policy lint findings come from `policy-lint.ts`, so the
  * card carries the same warnings `pgbeam policies lint` would print.
  */
@@ -34,29 +22,6 @@ import {
   lintPolicy,
   summarizeFindings,
 } from "./policy-lint.js";
-
-/** Every statement kind the wire analyzer classifies (`protocol.StmtKind`). */
-const statementKinds = [
-  "select",
-  "insert",
-  "update",
-  "delete",
-  "ddl",
-  "copy",
-  "set",
-  "show",
-  "explain",
-  "transaction",
-  "other",
-] as const;
-
-type StatementKind = (typeof statementKinds)[number];
-
-/** Kinds that mutate data or schema (`StmtKind.IsWrite`). */
-const writeKinds = new Set<StatementKind>(["insert", "update", "delete", "ddl", "copy"]);
-
-/** Kinds a read_only credential may use with no explicit allowlist entry. */
-const readOnlyKinds = new Set<StatementKind>(["select", "show", "explain", "transaction"]);
 
 /**
  * The subset of the credential record the card reads. The SDK `AgentCredential`
@@ -79,10 +44,18 @@ export interface CapabilityPolicy extends LintablePolicy {
   name?: string;
 }
 
+/** The statement-kind answer the card reads. The SDK `PolicyStatementKinds` satisfies it. */
+export interface CapabilityStatementKinds {
+  access_mode: "read_only" | "read_write";
+  statement_kinds: { kind: string; allowed: boolean; rule?: string; reason?: string }[];
+}
+
 interface StatementVerdict {
-  kind: StatementKind;
+  kind: string;
   allowed: boolean;
-  /** Why, in plain language. Empty when the kind is simply allowed. */
+  /** The engine's rule tag, null when the kind is allowed. */
+  rule: string | null;
+  /** The engine's reason, empty when the kind is allowed. */
   reason: string;
 }
 
@@ -133,54 +106,6 @@ export interface CapabilityCard {
   summary: LintSummary;
 }
 
-/** access_mode is read_only unless explicitly read_write (control-plane default). */
-function effectiveAccessMode(policy: CapabilityPolicy): "read_only" | "read_write" {
-  return policy.access_mode === "read_write" ? "read_write" : "read_only";
-}
-
-function decideStatement(
-  kind: StatementKind,
-  mode: "read_only" | "read_write",
-  allow: readonly string[],
-  deny: readonly string[],
-): StatementVerdict {
-  if (kind === "copy") {
-    return { kind, allowed: false, reason: "COPY is blocked for agent credentials; use SELECT" };
-  }
-  if (deny.includes(kind)) {
-    return { kind, allowed: false, reason: "denied by statement_rules.deny" };
-  }
-  if (allow.length > 0 && !allow.includes(kind)) {
-    return { kind, allowed: false, reason: "not in statement_rules.allow" };
-  }
-  // An unclassifiable statement fails closed in every access mode; the only
-  // escape is an explicit "other" entry in the allowlist.
-  if (kind === "other" && !allow.includes("other")) {
-    return {
-      kind,
-      allowed: false,
-      reason: 'unrecognized statements fail closed; allowlist "other" to permit them',
-    };
-  }
-  if (mode === "read_only") {
-    if (writeKinds.has(kind)) {
-      return {
-        kind,
-        allowed: false,
-        reason: "read_only is a ceiling, so the statement allowlist cannot lift it",
-      };
-    }
-    if (!readOnlyKinds.has(kind) && !allow.includes(kind)) {
-      return {
-        kind,
-        allowed: false,
-        reason: `read_only permits select, show, explain and transaction only; allowlist "${kind}" to permit it`,
-      };
-    }
-  }
-  return { kind, allowed: true, reason: "" };
-}
-
 function describeReach(allowlist: readonly string[], denylist: readonly string[]): string {
   if (allowlist.length > 0 && denylist.length > 0) {
     return `Only the ${allowlist.length} allowlisted relation(s), minus any the denylist also names.`;
@@ -194,15 +119,14 @@ function describeReach(allowlist: readonly string[], denylist: readonly string[]
   return "Every relation in the database. No allowlist is set.";
 }
 
-/** Build the capability card from a credential and the policy attached to it. */
+/** Build the capability card from a credential, its policy and that policy's statement-kind verdicts. */
 export function buildCapabilityCard(
   credential: CapabilityCredential,
   policy: CapabilityPolicy,
+  kinds: CapabilityStatementKinds,
   now: Date = new Date(),
 ): CapabilityCard {
-  const mode = effectiveAccessMode(policy);
-  const allow = policy.statement_rules?.allow ?? [];
-  const deny = policy.statement_rules?.deny ?? [];
+  const mode = kinds.access_mode;
   const allowlist = policy.table_allowlist ?? [];
   const denylist = policy.table_denylist ?? [];
 
@@ -239,7 +163,12 @@ export function buildCapabilityCard(
     policy: { id: policy.id ?? credential.policy_profile_id ?? null, name: policy.name ?? null },
     access: {
       mode,
-      statements: statementKinds.map((kind) => decideStatement(kind, mode, allow, deny)),
+      statements: kinds.statement_kinds.map((v) => ({
+        kind: v.kind,
+        allowed: v.allowed,
+        rule: v.allowed ? null : (v.rule ?? null),
+        reason: v.allowed ? "" : (v.reason ?? ""),
+      })),
     },
     tables: {
       allowlist: [...allowlist],
@@ -293,6 +222,16 @@ function note(text: string): string {
 
 const severityLabel: Record<string, string> = { error: "error", warning: "warn", info: "info" };
 
+/** One operator-facing sentence per kind-level rule tag from `policy.go`. Wording only. */
+const ruleExplanation: Record<string, string> = {
+  copy_blocked: "COPY is blocked for agent credentials; use SELECT",
+  statement_denied: "denied by statement_rules.deny",
+  statement_not_allowed: "not in statement_rules.allow",
+  unknown_statement: 'unrecognized statements fail closed; allowlist "other" to permit them',
+  read_only:
+    "read_only is a ceiling the allowlist cannot lift for a write; a non-write kind beyond select, show, explain and transaction needs an allowlist entry",
+};
+
 /**
  * Render the card as plain lines for stdout. Kept separate from the command so
  * the rendering is testable without a terminal, and returns lines rather than
@@ -326,20 +265,25 @@ export function formatCapabilityCard(card: CapabilityCard, now: Date = new Date(
   lines.push(`Statements (access_mode ${access.mode})`);
   const allowedKinds = access.statements.filter((s) => s.allowed).map((s) => s.kind);
   lines.push(keyValue("Allowed", allowedKinds.length > 0 ? allowedKinds.join(", ") : "none"));
-  // Group the refusals by reason so the card says why once, not eleven times.
-  const byReason = new Map<string, StatementKind[]>();
+  // Group the refusals by rule so the card says why once, not eleven times. The
+  // engine's reason names the kind, so it is the fallback for a rule not listed.
+  const byRule = new Map<string, { kinds: string[]; why: string }>();
   for (const verdict of access.statements) {
     if (verdict.allowed) continue;
-    const kinds = byReason.get(verdict.reason) ?? [];
-    kinds.push(verdict.kind);
-    byReason.set(verdict.reason, kinds);
+    const key = verdict.rule ?? verdict.reason;
+    const group = byRule.get(key) ?? {
+      kinds: [],
+      why: (verdict.rule && ruleExplanation[verdict.rule]) || verdict.reason,
+    };
+    group.kinds.push(verdict.kind);
+    byRule.set(key, group);
   }
   let first = true;
-  for (const [reason, kinds] of byReason) {
-    lines.push(keyValue(first ? "Blocked" : "", `${kinds.join(", ")} (${reason})`));
+  for (const { kinds, why } of byRule.values()) {
+    lines.push(keyValue(first ? "Blocked" : "", `${kinds.join(", ")} (${why})`));
     first = false;
   }
-  if (byReason.size === 0) {
+  if (byRule.size === 0) {
     lines.push(keyValue("Blocked", "none"));
   }
 

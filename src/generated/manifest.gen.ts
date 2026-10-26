@@ -2694,6 +2694,10 @@ export const commandManifest: GeneratedCommand[] = [
           label: "Content Scan Max Bytes",
         },
         {
+          key: "query_mode",
+          label: "Query Mode",
+        },
+        {
           key: "updated_at",
           label: "Updated At",
           date: true,

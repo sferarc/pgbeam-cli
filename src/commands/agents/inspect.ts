@@ -12,7 +12,7 @@ export default defineCommand({
     description: "Show what an agent credential can actually do",
     docs: {
       longDescription:
-        "Fetch an agent credential together with the policy profile attached to it and print one capability card: whether the credential can connect at all, which statement kinds it can run, which relations it can reach, which columns come back masked, its budgets and caps, and how its writes are handled. The card resolves the two records against each other the way the proxy does, so it reports the effective answer rather than the raw fields: a read-only credential that lists `update` in its statement allowlist is still shown as blocked, because access_mode is a ceiling the allowlist cannot lift. The same static checks `pgbeam policies lint` runs are appended, so a credential attached to a risky policy says so here. Read-only: it fetches two records and computes the rest offline. Use `pgbeam agents show` for the raw credential record.",
+        "Fetch an agent credential together with the policy profile attached to it and print one capability card: whether the credential can connect at all, which statement kinds it can run, which relations it can reach, which columns come back masked, its budgets and caps, and how its writes are handled. The card reports the effective answer rather than the raw fields: a read-only credential that lists `update` in its statement allowlist is still shown as blocked, because access_mode is a ceiling the allowlist cannot lift. The same static checks `pgbeam policies lint` runs are appended, so a credential attached to a risky policy says so here. The statement kinds come from the control plane, which asks the proxy's own policy engine. Read-only: it fetches three records and computes the rest offline. Use `pgbeam agents show` for the raw credential record.",
       examples: [
         {
           comment: "Show a credential's capability card",
@@ -47,11 +47,13 @@ export default defineCommand({
           `Agent credential ${credential.id} has no policy profile attached, so its capability cannot be resolved.`,
         );
       }
-      const policy = await ctx.client.policies.getPolicyProfile({
-        pathParams: { project_id: projectId, policy_id: credential.policy_profile_id },
-      });
+      const pathParams = { project_id: projectId, policy_id: credential.policy_profile_id };
+      const [policy, kinds] = await Promise.all([
+        ctx.client.policies.getPolicyProfile({ pathParams }),
+        ctx.client.policies.getPolicyStatementKinds({ pathParams }),
+      ]);
 
-      const card = buildCapabilityCard(credential, policy);
+      const card = buildCapabilityCard(credential, policy, kinds);
 
       output(card, args.json, () => {
         for (const line of formatCapabilityCard(card)) {

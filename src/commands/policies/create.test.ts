@@ -163,7 +163,7 @@ describe("policies create", () => {
   it("rejects an invalid --write-mode with a clear message", async () => {
     await expect(
       run({ args: { ...baseArgs, name: "x", "write-mode": "yolo" } } as never),
-    ).rejects.toThrow(/Invalid write-mode: "yolo".*normal, rollback, sandbox/);
+    ).rejects.toThrow(/Invalid write-mode: "yolo".*normal, rollback/);
     expect(mockCreatePolicyProfile).not.toHaveBeenCalled();
   });
 
@@ -180,7 +180,7 @@ describe("policies create", () => {
         ...baseArgs,
         name: "preview",
         mode: "read_write",
-        "write-mode": "sandbox",
+        "write-mode": "rollback",
         "migration-safety": "block",
         "dry-run": true,
       },
@@ -189,7 +189,7 @@ describe("policies create", () => {
     expect(outputJson).toHaveBeenCalledWith({
       name: "preview",
       access_mode: "read_write",
-      write_mode: "sandbox",
+      write_mode: "rollback",
       migration_safety: "block",
     });
     expect(mockCreatePolicyProfile).not.toHaveBeenCalled();
