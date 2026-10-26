@@ -1,5 +1,13 @@
 # @pgbeam/cli
 
+## 0.5.2
+
+### Patch Changes
+
+- 0cf6810: refactor(policy): serve statement-kind verdicts from the engine to the CLI card
+- Updated dependencies [0cf6810]
+  - pgbeam@0.7.1
+
 ## 0.5.1
 
 ### Patch Changes
