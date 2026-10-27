@@ -174,6 +174,23 @@ describe("policies create", () => {
     expect(mockCreatePolicyProfile).not.toHaveBeenCalled();
   });
 
+  it("builds --query-mode into the request body", async () => {
+    await run({ args: { ...baseArgs, name: "lookups", "query-mode": "templates" } } as never);
+
+    expect(mockCreatePolicyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { name: "lookups", query_mode: "templates" },
+      }),
+    );
+  });
+
+  it("rejects an invalid --query-mode with a clear message", async () => {
+    await expect(
+      run({ args: { ...baseArgs, name: "x", "query-mode": "raw" } } as never),
+    ).rejects.toThrow(/Invalid query-mode: "raw".*sql, templates/);
+    expect(mockCreatePolicyProfile).not.toHaveBeenCalled();
+  });
+
   it("--dry-run includes the write-safety flags in the resolved body", async () => {
     await run({
       args: {

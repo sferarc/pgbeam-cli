@@ -18,6 +18,7 @@ const accessModes = { read_only: "read_only", read_write: "read_write" } as cons
 const writeModes = { normal: "normal", rollback: "rollback" } as const;
 const approvalModes = { off: "off", writes: "writes", ddl: "ddl", all: "all" } as const;
 const migrationSafetyModes = { off: "off", warn: "warn", block: "block" } as const;
+const queryModes = { sql: "sql", templates: "templates" } as const;
 
 /** Split a comma-separated flag value into a trimmed, non-empty list. */
 function parseList(value: string): string[] {
@@ -52,6 +53,10 @@ export default defineCommand({
           command: "pgbeam policies update pol_xxx --budget-queries-per-day 5000 --max-rows 1000",
         },
         {
+          comment: "Confine a profile to the project's query templates",
+          command: "pgbeam policies update pol_xxx --query-mode templates",
+        },
+        {
           comment: "Replace the full profile from a JSON file",
           command: "pgbeam policies update pol_xxx --file ./policy.json",
         },
@@ -83,6 +88,11 @@ export default defineCommand({
     "migration-safety": {
       type: "string",
       description: "Migration safety mode: off, warn, or block",
+    },
+    "query-mode": {
+      type: "string",
+      description:
+        "What an agent may send: sql (any statement the policy allows) or templates (only the project's enabled query templates)",
     },
     "table-allowlist": {
       type: "string",
@@ -222,6 +232,10 @@ export default defineCommand({
           migrationSafetyModes,
           "migration-safety",
         );
+        touch();
+      }
+      if (args["query-mode"]) {
+        body.query_mode = parseEnum(args["query-mode"], queryModes, "query-mode");
         touch();
       }
       if (typeof args["table-allowlist"] === "string") {

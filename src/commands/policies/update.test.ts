@@ -135,6 +135,33 @@ describe("policies update", () => {
     );
   });
 
+  it("sets query_mode from --query-mode", async () => {
+    await run({ args: { ...baseArgs, id: "pol_1", "query-mode": "templates" } } as never);
+
+    expect(mockUpdatePolicyProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ query_mode: "templates" }),
+      }),
+    );
+  });
+
+  it("leaves query_mode out of an edit that does not name it", async () => {
+    // The API keeps the stored mode when the field is omitted.
+    mockGetPolicyProfile.mockResolvedValue({ ...currentProfile, query_mode: "templates" });
+
+    await run({ args: { ...baseArgs, id: "pol_1", mode: "read_write" } } as never);
+
+    const { body } = mockUpdatePolicyProfile.mock.calls[0][0];
+    expect(body).not.toHaveProperty("query_mode");
+  });
+
+  it("rejects an invalid --query-mode with a clear message", async () => {
+    await expect(
+      run({ args: { ...baseArgs, id: "pol_1", "query-mode": "raw" } } as never),
+    ).rejects.toThrow(/Invalid query-mode: "raw".*sql, templates/);
+    expect(mockUpdatePolicyProfile).not.toHaveBeenCalled();
+  });
+
   it("updates max_affected_rows when the flag is passed", async () => {
     await run({
       args: { ...baseArgs, id: "pol_1", "max-affected-rows": "500" },

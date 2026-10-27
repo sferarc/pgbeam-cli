@@ -17,6 +17,7 @@ const accessModes = { read_only: "read_only", read_write: "read_write" } as cons
 const writeModes = { normal: "normal", rollback: "rollback" } as const;
 const approvalModes = { off: "off", writes: "writes", ddl: "ddl", all: "all" } as const;
 const migrationSafetyModes = { off: "off", warn: "warn", block: "block" } as const;
+const queryModes = { sql: "sql", templates: "templates" } as const;
 
 /** Numeric budget and limit flags, mapped to their PolicyProfileInput fields. */
 const numericFlags = {
@@ -44,7 +45,7 @@ export default defineCommand({
     description: "Create a policy profile",
     docs: {
       longDescription:
-        "Create a policy profile. Provide a name and access mode, then author the rules with flags (`--allow`, `--deny`, `--mask`, budget flags, and the write-safety flags `--write-mode`, `--approval-mode`, `--approval-timeout-seconds`, `--approval-auto-max-rows`, `--migration-safety`) or pass a JSON file describing the full profile (statement rules, allow/deny lists, masking, budgets). Fields set via `--file` are overlaid by any individual flags. The resolved profile is validated against the API schema before anything is sent; `--dry-run` prints the resolved profile JSON without calling the API.",
+        "Create a policy profile. Provide a name and access mode, then author the rules with flags (`--allow`, `--deny`, `--mask`, budget flags, and the write-safety flags `--write-mode`, `--approval-mode`, `--approval-timeout-seconds`, `--approval-auto-max-rows`, `--migration-safety`, plus `--query-mode` to admit only the project's query templates) or pass a JSON file describing the full profile (statement rules, allow/deny lists, masking, budgets). Fields set via `--file` are overlaid by any individual flags. The resolved profile is validated against the API schema before anything is sent; `--dry-run` prints the resolved profile JSON without calling the API.",
       examples: [
         {
           comment: "Create a read-only profile",
@@ -97,6 +98,11 @@ export default defineCommand({
     "migration-safety": {
       type: "string",
       description: "Migration safety mode: off, warn, or block",
+    },
+    "query-mode": {
+      type: "string",
+      description:
+        "What an agent may send: sql (any statement the policy allows) or templates (only the project's enabled query templates)",
     },
     "table-allowlist": {
       type: "string",
@@ -175,6 +181,9 @@ export default defineCommand({
           migrationSafetyModes,
           "migration-safety",
         );
+      }
+      if (args["query-mode"]) {
+        body.query_mode = parseEnum(args["query-mode"], queryModes, "query-mode");
       }
       if (typeof args["table-allowlist"] === "string") {
         body.table_allowlist = parseList(args["table-allowlist"]);
