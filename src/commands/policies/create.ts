@@ -214,8 +214,7 @@ export default defineCommand({
 
       const p = await ctx.client.policies.createPolicyProfile({
         pathParams: { project_id: projectId },
-        // biome-ignore lint/suspicious/noExplicitAny: body is validated against the contract-derived schema above
-        body: body as any,
+        body,
       });
 
       output(p, args.json, () => {

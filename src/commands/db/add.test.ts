@@ -154,6 +154,34 @@ describe("db add", () => {
     expect(output).toHaveBeenCalledWith(result, true, expect.any(Function));
   });
 
+  it("sends complete cache and pool configs with zero values for unset fields", async () => {
+    mockCreateDatabase.mockResolvedValue({ id: "db_1", name: "n", host: "h", port: 5432 });
+
+    await run({
+      args: {
+        host: "h",
+        port: "5432",
+        name: "n",
+        username: "u",
+        password: "p",
+        "ssl-mode": "require",
+        "cache-ttl": "120",
+        "pool-size": "20",
+        json: false,
+        "no-color": false,
+        debug: false,
+      },
+    } as never);
+
+    expect(mockCreateDatabase).toHaveBeenCalledWith({
+      pathParams: { project_id: "prj_1" },
+      body: expect.objectContaining({
+        cache_config: { enabled: false, ttl_seconds: 120, max_entries: 0, swr_seconds: 0 },
+        pool_config: { pool_mode: "transaction", pool_size: 20, min_pool_size: 0 },
+      }),
+    });
+  });
+
   it("requires a linked project", async () => {
     mockCreateDatabase.mockResolvedValue({ id: "db_1", name: "n", host: "h", port: 5432 });
 

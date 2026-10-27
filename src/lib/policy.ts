@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import type { PolicyProfileInput } from "pgbeam";
 import {
   type PolicyMaskingKind,
   type PolicySchemaNode,
@@ -151,7 +152,10 @@ export function validatePolicyInput(value: unknown): string[] {
  * Validate a policy body and throw a single readable error listing every
  * problem when it is invalid.
  */
-export function assertValidPolicyInput(value: unknown, source: string): void {
+export function assertValidPolicyInput(
+  value: unknown,
+  source: string,
+): asserts value is PolicyProfileInput {
   const problems = validatePolicyInput(value);
   if (problems.length > 0) {
     throw new Error(

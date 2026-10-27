@@ -1,7 +1,7 @@
 import { input, password, select } from "@inquirer/prompts";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import type { CacheConfig, CreateDatabaseBody, PoolConfig } from "pgbeam";
+import type { CreateDatabaseBody } from "pgbeam";
 import { parseEnum, parseNumber, poolModes, sslModes } from "../../lib/args.js";
 import { requireProject, resolveContext } from "../../lib/client.js";
 import { runCommand } from "../../lib/errors.js";
@@ -153,22 +153,25 @@ export default defineCommand({
         body.auto_read_routing = args["auto-read-routing"];
       }
       if (args["cache-enabled"] !== undefined || args["cache-ttl"]) {
-        const cache: Partial<CacheConfig> = {};
-        if (args["cache-enabled"] !== undefined) cache.enabled = args["cache-enabled"];
-        if (args["cache-ttl"]) cache.ttl_seconds = parseNumber(args["cache-ttl"], "cache-ttl");
-        // biome-ignore lint/suspicious/noExplicitAny: server fills the remaining cache defaults
-        body.cache_config = cache as any;
+        // Unset fields go as the zero values the API decodes an omitted field to.
+        body.cache_config = {
+          enabled: args["cache-enabled"] ?? false,
+          ttl_seconds: args["cache-ttl"] ? parseNumber(args["cache-ttl"], "cache-ttl") : 0,
+          max_entries: 0,
+          swr_seconds: 0,
+        };
       }
       if (args["pool-mode"] || args["pool-size"] || args["min-pool-size"]) {
-        const pool: Partial<PoolConfig> = {};
-        if (args["pool-mode"])
-          pool.pool_mode = parseEnum(args["pool-mode"], poolModes, "pool-mode");
-        if (args["pool-size"]) pool.pool_size = parseNumber(args["pool-size"], "pool-size");
-        if (args["min-pool-size"]) {
-          pool.min_pool_size = parseNumber(args["min-pool-size"], "min-pool-size");
-        }
-        // biome-ignore lint/suspicious/noExplicitAny: server fills the remaining pool defaults
-        body.pool_config = pool as any;
+        // Zero sizes mean the platform default; transaction is the API's default mode.
+        body.pool_config = {
+          pool_mode: args["pool-mode"]
+            ? parseEnum(args["pool-mode"], poolModes, "pool-mode")
+            : poolModes.transaction,
+          pool_size: args["pool-size"] ? parseNumber(args["pool-size"], "pool-size") : 0,
+          min_pool_size: args["min-pool-size"]
+            ? parseNumber(args["min-pool-size"], "min-pool-size")
+            : 0,
+        };
       }
 
       const result = await ctx.client.databases.createDatabase({
