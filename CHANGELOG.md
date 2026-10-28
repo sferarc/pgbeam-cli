@@ -1,5 +1,11 @@
 # @pgbeam/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- 657727e: Add `--query-mode sql|templates` to `pgbeam policies create` and `pgbeam policies update`, so a profile can be confined to the project's query templates without a `--file` body.
+
 ## 0.5.2
 
 ### Patch Changes
