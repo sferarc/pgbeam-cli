@@ -18,7 +18,7 @@ export interface PolicySchemaNode {
   maxLength?: number;
 }
 
-export const policyMaskingKinds = ["redact", "null", "hash"] as const;
+export const policyMaskingKinds = ["redact", "null", "hash", "last4", "email_domain"] as const;
 
 export type PolicyMaskingKind = (typeof policyMaskingKinds)[number];
 
@@ -78,7 +78,7 @@ export const policyProfileInputSchema: PolicySchemaNode = {
           },
           kind: {
             type: "string",
-            enum: ["redact", "null", "hash"],
+            enum: ["redact", "null", "hash", "last4", "email_domain"],
           },
         },
       },

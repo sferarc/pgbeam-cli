@@ -115,7 +115,7 @@ export default defineCommand({
     mask: {
       type: "string",
       description:
-        "Masking rule as table.column=kind, where kind is redact, null, or hash (repeatable; replaces the current rules)",
+        "Masking rule as table.column=kind, where kind is redact, null, hash, last4, or email_domain (repeatable; replaces the current rules)",
     },
     "max-rows": { type: "string", description: "Max rows returned per query (0 means unlimited)" },
     "max-affected-rows": {

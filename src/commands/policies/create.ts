@@ -123,7 +123,7 @@ export default defineCommand({
     mask: {
       type: "string",
       description:
-        "Masking rule as table.column=kind, where kind is redact, null, or hash (repeatable)",
+        "Masking rule as table.column=kind, where kind is redact, null, hash, last4, or email_domain (repeatable)",
     },
     "max-rows": {
       type: "string",
