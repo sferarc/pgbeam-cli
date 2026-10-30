@@ -1,5 +1,16 @@
 # @pgbeam/cli
 
+## 0.7.0
+
+### Minor Changes
+
+- adb5b67: Add the `last4` and `email_domain` partial mask kinds to masking rules. `last4` returns `****` plus the value's last four characters, and `email_domain` returns `****@` plus the domain. A value too short for `last4`, or one whose text after its last `@` is not a hostname or bracketed IP address under `email_domain`, is redacted instead.
+
+### Patch Changes
+
+- Updated dependencies [adb5b67]
+  - pgbeam@0.8.0
+
 ## 0.6.0
 
 ### Minor Changes
