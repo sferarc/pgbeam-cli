@@ -1,5 +1,12 @@
 # @pgbeam/cli
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies [cf9b283]
+  - pgbeam@0.9.0
+
 ## 0.7.0
 
 ### Minor Changes
