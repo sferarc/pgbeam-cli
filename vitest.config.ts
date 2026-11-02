@@ -41,5 +41,5 @@ export default defineConfig({
    * out made a config file appear where there had been none and reported all 86
    * CLI test files as unused, which fails `pnpm knip`.
    */
-  test: { include: ["**/*.test.ts"] },
+  test: { include: ["**/*.test.ts"], setupFiles: ["./vitest.setup.ts"] },
 });

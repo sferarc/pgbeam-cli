@@ -27,6 +27,8 @@ vi.mock("node:fs", async (importOriginal) => {
   const fs = await importOriginal<typeof import("node:fs")>();
   return {
     ...fs,
+    // Replaces the setup file's mock, so keep its fsync no-op.
+    fsyncSync: vi.fn(),
     writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
       if (fsFailure.failWrites) throw new Error("ENOSPC: no space left on device");
       return fs.writeFileSync(...args);
