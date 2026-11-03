@@ -154,5 +154,13 @@ export const policyProfileInputSchema: PolicySchemaNode = {
       type: "string",
       enum: ["sql", "templates"],
     },
+    function_denylist: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+        maxLength: 127,
+      },
+    },
   },
 };
