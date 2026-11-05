@@ -5,9 +5,9 @@
  * The `claude`, `claude-desktop`, `cursor` and `vscode` shapes MUST stay
  * byte-identical to the dashboard's `mcpClientConfig`
  * (`frontend/apps/dashboard/lib/mcp-client-config.ts`) so the CLI and dashboard
- * emit the same config for the same URL + token. `cline` and `windsurf` are
- * CLI-only; do not change a shared shape without changing the dashboard in the
- * same commit.
+ * emit the same config for the same URL + token. `cline`, `windsurf`, `codex`,
+ * `gemini` and `zed` are CLI-only; do not change a shared shape without changing
+ * the dashboard in the same commit.
  *
  * Every shape here is verified against the client's own schema or published
  * install docs, because these strings get pasted into an editor and submitted to
@@ -27,6 +27,9 @@ export const mcpClients = [
   "vscode",
   "cline",
   "windsurf",
+  "codex",
+  "gemini",
+  "zed",
 ] as const;
 
 export type McpClient = (typeof mcpClients)[number];
@@ -39,6 +42,9 @@ const MCP_CLIENT_LABELS: Record<McpClient, string> = {
   vscode: "VS Code",
   cline: "Cline",
   windsurf: "Windsurf",
+  codex: "Codex CLI",
+  gemini: "Gemini CLI",
+  zed: "Zed",
 };
 
 /**
@@ -54,6 +60,9 @@ export const MCP_CLIENT_FILES: Record<McpClient, string> = {
   vscode: ".vscode/mcp.json",
   cline: "cline_mcp_settings.json",
   windsurf: "mcp_config.json",
+  codex: "config.toml",
+  gemini: "settings.json",
+  zed: "settings.json",
 };
 
 /**
@@ -68,6 +77,10 @@ export const MCP_CLIENT_FILES: Record<McpClient, string> = {
  * Cline keeps its settings in the VS Code extension's global storage, so the path
  * changes in a VS Code fork; the in-app "Configure MCP Servers" button is the
  * reliable route. Windsurf paths per its published install docs.
+ *
+ * Codex, Gemini CLI and Zed also read a project file, but it is the same
+ * settings file that holds the user's other options, so it is merged by hand
+ * too. Paths per each client's MCP docs.
  */
 export const MCP_CLIENT_GLOBAL_PATHS: Partial<Record<McpClient, readonly string[]>> = {
   "claude-desktop": [
@@ -83,6 +96,13 @@ export const MCP_CLIENT_GLOBAL_PATHS: Partial<Record<McpClient, readonly string[
   windsurf: [
     "macOS and Linux: ~/.codeium/windsurf/mcp_config.json",
     "Windows: %USERPROFILE%\\.codeium\\windsurf\\mcp_config.json",
+  ],
+  codex: ["Every project: ~/.codex/config.toml", "One trusted project: .codex/config.toml"],
+  gemini: ["Every project: ~/.gemini/settings.json", "One project: .gemini/settings.json"],
+  zed: [
+    "In Zed: run zed: open settings file",
+    "macOS and Linux: ~/.config/zed/settings.json",
+    "One project: .zed/settings.json",
   ],
 };
 
@@ -121,6 +141,10 @@ export function parseMcpClient(value: string): McpClient {
  *   streamable-HTTP endpoint.
  * - Windsurf: keys a remote server off `serverUrl`, not `url`, and infers the
  *   transport from it.
+ * - Codex CLI: TOML, not JSON. A `[mcp_servers.<name>]` table with `url` is a
+ *   streamable HTTP server, and `http_headers` carries static headers.
+ * - Gemini CLI: `httpUrl` selects streamable HTTP; its `url` key means SSE.
+ * - Zed: remote servers sit under `context_servers` with `url` and `headers`.
  */
 export function mcpClientConfig(client: McpClient, url: string, token: string): string {
   const headers = { Authorization: `Bearer ${token}` };
@@ -160,6 +184,17 @@ export function mcpClientConfig(client: McpClient, url: string, token: string): 
       );
     case "windsurf":
       return JSON.stringify({ mcpServers: { pgbeam: { serverUrl: url, headers } } }, null, 2);
+    case "codex":
+      // JSON string escapes are a subset of TOML basic string escapes.
+      return [
+        "[mcp_servers.pgbeam]",
+        `url = ${JSON.stringify(url)}`,
+        `http_headers = { "Authorization" = ${JSON.stringify(headers.Authorization)} }`,
+      ].join("\n");
+    case "gemini":
+      return JSON.stringify({ mcpServers: { pgbeam: { httpUrl: url, headers } } }, null, 2);
+    case "zed":
+      return JSON.stringify({ context_servers: { pgbeam: server } }, null, 2);
   }
 }
 

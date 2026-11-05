@@ -80,6 +80,9 @@ describe("agents mcp-config", () => {
       "vscode",
       "cline",
       "windsurf",
+      "codex",
+      "gemini",
+      "zed",
     ]);
   });
 
@@ -109,6 +112,8 @@ describe("agents mcp-config", () => {
   it.each([
     { client: "cline", file: "cline_mcp_settings.json", key: "mcpServers.pgbeam.type" },
     { client: "windsurf", file: "mcp_config.json", key: "mcpServers.pgbeam.serverUrl" },
+    { client: "gemini", file: "settings.json", key: "mcpServers.pgbeam.httpUrl" },
+    { client: "zed", file: "settings.json", key: "context_servers.pgbeam.url" },
   ])("emits $client config to $file", async ({ client, file, key }) => {
     await run({
       args: { ...baseArgs, url: URL, "mcp-token": TOKEN, client, json: true },
@@ -119,6 +124,15 @@ describe("agents mcp-config", () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({ client, file });
     expect(JSON.parse(parsed[0].config)).toHaveProperty(key);
+  });
+
+  it("emits Codex CLI TOML to config.toml and never writes it with --write", async () => {
+    await run({
+      args: { ...baseArgs, url: URL, "mcp-token": TOKEN, client: "codex", write: true },
+    } as never);
+
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(consola.warn).toHaveBeenCalledWith(expect.stringContaining("~/.codex/config.toml"));
   });
 
   it("writes config to the client's file path with --write", async () => {
@@ -152,8 +166,8 @@ describe("agents mcp-config", () => {
 
     const targets = vi.mocked(writeFile).mock.calls.map((c) => c[0]);
     expect(targets).toEqual([".mcp.json", ".cursor/mcp.json", ".vscode/mcp.json"]);
-    // Claude Desktop, Cline and Windsurf each warn instead of clobbering.
-    expect(consola.warn).toHaveBeenCalledTimes(3);
+    // The six machine-wide or shared-settings clients warn instead of clobbering.
+    expect(consola.warn).toHaveBeenCalledTimes(6);
   });
 
   it("reads secrets from a JSON file via --from-file", async () => {

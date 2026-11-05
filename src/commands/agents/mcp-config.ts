@@ -48,7 +48,7 @@ export default defineCommand({
     description: "Emit ready-to-paste MCP client config from a credential's secrets",
     docs: {
       longDescription:
-        "Render the per-client MCP configuration (Claude Code, Claude Desktop, Cursor, VS Code, Cline, Windsurf) for the hosted agent-database MCP endpoint, given a credential's MCP URL and token. Because secrets are shown only once at creation, pass the URL + token directly (--url/--mcp-token), pipe the JSON output of `agents create --json` / `agents rotate --json` with --from-json, or read it from a saved file with --from-file. Claude Desktop, Cline and Windsurf each keep one config file per machine rather than one per project, so --write prints those with their per-OS path instead of overwriting them: merge the entry in by hand. Claude Desktop also cannot address a remote URL directly, so its config is an `mcp-remote` bridge.",
+        "Render the per-client MCP configuration (Claude Code, Claude Desktop, Cursor, VS Code, Cline, Windsurf, Codex CLI, Gemini CLI, Zed) for the hosted agent-database MCP endpoint, given a credential's MCP URL and token. Because secrets are shown only once at creation, pass the URL + token directly (--url/--mcp-token), pipe the JSON output of `agents create --json` / `agents rotate --json` with --from-json, or read it from a saved file with --from-file. Claude Desktop, Cline and Windsurf each keep one config file per machine rather than one per project, and Codex CLI, Gemini CLI and Zed keep MCP servers in the same file as their other settings, so --write prints those with their paths instead of overwriting them: merge the entry in by hand. Claude Desktop also cannot address a remote URL directly, so its config is an `mcp-remote` bridge.",
       examples: [
         {
           comment: "Emit Claude Code config from a URL + token",
@@ -72,7 +72,7 @@ export default defineCommand({
         },
       ],
       response:
-        "Prints the MCP config block(s). With --json, returns a structured array of { client, file, config }. With --write, writes each project-scoped client's config to its conventional file path; machine-wide files (Claude Desktop, Cline, Windsurf) are printed with their per-OS location instead of being overwritten.",
+        "Prints the MCP config block(s). With --json, returns a structured array of { client, file, config }. With --write, writes each project-scoped client's config to its conventional file path; machine-wide or shared settings files (Claude Desktop, Cline, Windsurf, Codex CLI, Gemini CLI, Zed) are printed with their location instead of being overwritten.",
     },
   },
   args: {
@@ -98,7 +98,7 @@ export default defineCommand({
     client: {
       type: "string",
       description:
-        "MCP client: claude (default), claude-desktop, cursor, vscode, cline, windsurf, or all",
+        "MCP client: claude (default), claude-desktop, cursor, vscode, cline, windsurf, codex, gemini, zed, or all",
       default: "claude",
     },
     write: {

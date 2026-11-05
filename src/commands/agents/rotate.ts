@@ -39,7 +39,7 @@ export default defineCommand({
     client: {
       type: "string",
       description:
-        "MCP client to emit config for: claude (default), claude-desktop, cursor, vscode, cline, windsurf, or all",
+        "MCP client to emit config for: claude (default), claude-desktop, cursor, vscode, cline, windsurf, codex, gemini, zed, or all",
       default: "claude",
     },
     yes: {

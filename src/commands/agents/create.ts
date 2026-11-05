@@ -16,7 +16,7 @@ export default defineCommand({
     description: "Issue a new agent credential",
     docs: {
       longDescription:
-        "Issue a scoped Postgres login and hosted MCP token for an AI agent. The connection string and MCP token are shown once and cannot be retrieved again. Store them securely. A ready-to-paste MCP client config (Claude Code, Claude Desktop, Cursor, VS Code, Cline, or Windsurf) is printed alongside the secrets.",
+        "Issue a scoped Postgres login and hosted MCP token for an AI agent. The connection string and MCP token are shown once and cannot be retrieved again. Store them securely. A ready-to-paste MCP client config (Claude Code, Claude Desktop, Cursor, VS Code, Cline, Windsurf, Codex CLI, Gemini CLI or Zed) is printed alongside the secrets.",
       examples: [
         {
           comment: "Create a credential bound to a policy profile",
@@ -55,7 +55,7 @@ export default defineCommand({
     client: {
       type: "string",
       description:
-        "MCP client to emit config for: claude (default), claude-desktop, cursor, vscode, cline, windsurf, or all",
+        "MCP client to emit config for: claude (default), claude-desktop, cursor, vscode, cline, windsurf, codex, gemini, zed, or all",
       default: "claude",
     },
     expires: {

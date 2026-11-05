@@ -83,7 +83,23 @@ describe("mcpClientConfig", () => {
         mcpServers: { pgbeam: { serverUrl: URL, headers: { Authorization: `Bearer ${TOKEN}` } } },
       },
     },
+    {
+      client: "gemini",
+      file: "settings.json",
+      expected: {
+        mcpServers: { pgbeam: { httpUrl: URL, headers: { Authorization: `Bearer ${TOKEN}` } } },
+      },
+    },
+    {
+      client: "zed",
+      file: "settings.json",
+      expected: {
+        context_servers: { pgbeam: { url: URL, headers: { Authorization: `Bearer ${TOKEN}` } } },
+      },
+    },
   ];
+  // Codex reads TOML, so it is checked as text below rather than as parsed JSON.
+  const jsonClients = mcpClients.filter((c) => c !== "codex");
 
   // Byte-for-byte expected output. Users paste these strings into an editor, and
   // catalog listings embed them, so a whitespace or key-order change is a
@@ -159,6 +175,29 @@ describe("mcpClientConfig", () => {
     }
   }
 }`,
+    codex: `[mcp_servers.pgbeam]
+url = "https://abc.proxy.pgbeam.app/mcp"
+http_headers = { "Authorization" = "Bearer pba_a1b2c3d4e5f6g7h8" }`,
+    gemini: `{
+  "mcpServers": {
+    "pgbeam": {
+      "httpUrl": "https://abc.proxy.pgbeam.app/mcp",
+      "headers": {
+        "Authorization": "Bearer pba_a1b2c3d4e5f6g7h8"
+      }
+    }
+  }
+}`,
+    zed: `{
+  "context_servers": {
+    "pgbeam": {
+      "url": "https://abc.proxy.pgbeam.app/mcp",
+      "headers": {
+        "Authorization": "Bearer pba_a1b2c3d4e5f6g7h8"
+      }
+    }
+  }
+}`,
   };
 
   it.each([...mcpClients])("emits the exact expected config text for %s", (client) => {
@@ -167,7 +206,7 @@ describe("mcpClientConfig", () => {
 
   it("covers every supported client with a literal and a shape case", () => {
     expect(Object.keys(literals).sort()).toEqual([...mcpClients].sort());
-    expect(cases.map((c) => c.client).sort()).toEqual([...mcpClients].sort());
+    expect(cases.map((c) => c.client).sort()).toEqual([...jsonClients].sort());
   });
 
   it.each(cases)("produces the dashboard-matching shape for $client", ({ client, expected }) => {
@@ -196,13 +235,41 @@ describe("mcpClientConfig", () => {
     }
   });
 
-  it("sets an Authorization header for every client that speaks HTTP directly", () => {
-    for (const client of ["claude", "cursor", "vscode", "cline", "windsurf"] as const) {
+  it("sets an Authorization header for every JSON client that speaks HTTP directly", () => {
+    for (const client of jsonClients.filter((c) => c !== "claude-desktop")) {
       const parsed = JSON.parse(mcpClientConfig(client, URL, TOKEN));
-      const server = client === "vscode" ? parsed.servers.pgbeam : parsed.mcpServers.pgbeam;
+      const server = (parsed.servers ?? parsed.mcpServers ?? parsed.context_servers).pgbeam;
       expect(server.headers.Authorization).toBe(`Bearer ${TOKEN}`);
-      expect(server.url ?? server.serverUrl).toBe(URL);
+      expect(server.url ?? server.serverUrl ?? server.httpUrl).toBe(URL);
     }
+  });
+
+  it("emits Codex a streamable HTTP table in TOML with a static Authorization header", () => {
+    expect(MCP_CLIENT_FILES.codex).toBe("config.toml");
+    const lines = mcpClientConfig("codex", URL, TOKEN).split("\n");
+    expect(lines[0]).toBe("[mcp_servers.pgbeam]");
+    // A table with `url` is streamable HTTP; `command` would make it stdio.
+    expect(lines).toContain(`url = "${URL}"`);
+    expect(lines).toContain(`http_headers = { "Authorization" = "Bearer ${TOKEN}" }`);
+    expect(lines.some((l) => l.startsWith("command"))).toBe(false);
+  });
+
+  it("escapes quotes and backslashes in the Codex TOML strings", () => {
+    const config = mcpClientConfig("codex", 'https://x/"a\\b', 'pba_"q');
+    expect(config).toContain('url = "https://x/\\"a\\\\b"');
+    expect(config).toContain('"Bearer pba_\\"q"');
+  });
+
+  it("selects streamable HTTP for Gemini CLI with httpUrl, since its url key means SSE", () => {
+    const parsed = JSON.parse(mcpClientConfig("gemini", URL, TOKEN));
+    expect(parsed.mcpServers.pgbeam.httpUrl).toBe(URL);
+    expect(parsed.mcpServers.pgbeam).not.toHaveProperty("url");
+  });
+
+  it("puts the Zed server under context_servers, the key Zed reads MCP servers from", () => {
+    const parsed = JSON.parse(mcpClientConfig("zed", URL, TOKEN));
+    expect(Object.keys(parsed)).toEqual(["context_servers"]);
+    expect(parsed.context_servers.pgbeam.url).toBe(URL);
   });
 
   it("requires an explicit transport type for Cline, which otherwise defaults to SSE", () => {
@@ -294,6 +361,9 @@ describe("buildMcpConfigBlocks", () => {
       "vscode",
       "cline",
       "windsurf",
+      "codex",
+      "gemini",
+      "zed",
     ]);
     expect(blocks.map((b) => b.client)).toEqual([...mcpClients]);
   });
@@ -309,6 +379,9 @@ describe("buildMcpConfigBlocks", () => {
       vscode: "project",
       cline: "global",
       windsurf: "global",
+      codex: "global",
+      gemini: "global",
+      zed: "global",
     });
   });
 
@@ -331,7 +404,7 @@ describe("parseMcpClient", () => {
   });
 
   it("rejects an unknown client", () => {
-    expect(() => parseMcpClient("zed")).toThrowError(/Invalid client/);
+    expect(() => parseMcpClient("helix")).toThrowError(/Invalid client/);
   });
 });
 
