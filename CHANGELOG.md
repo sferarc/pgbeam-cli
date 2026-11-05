@@ -1,5 +1,18 @@
 # @pgbeam/cli
 
+## 0.8.0
+
+### Minor Changes
+
+- e550105: `pgbeam agents mcp-config --client` (and `--client` on `agents create` and `agents rotate`) accepts `codex`, `gemini` and `zed`. Codex CLI gets a `[mcp_servers.pgbeam]` TOML table, Gemini CLI an `httpUrl` entry and Zed a `context_servers` entry. All three files hold other settings, so `--write` prints them with their paths instead of overwriting them.
+
+### Patch Changes
+
+- 60cbee4: Declare `mcpName: com.pgbeam/management-mcp` so the official MCP registry can list `pgbeam mcp` as the stdio package of the management MCP server.
+- Updated dependencies [2981e78]
+- Updated dependencies [61fbe14]
+  - pgbeam@0.10.1
+
 ## 0.7.2
 
 ### Patch Changes
