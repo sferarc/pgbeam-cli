@@ -3,6 +3,7 @@
   "version": "0.7.2",
   "description": "Command line interface for PgBeam, a Postgres proxy for safe AI agent access with policy enforcement in the wire protocol",
   "type": "module",
+  "mcpName": "com.pgbeam/management-mcp",
   "bin": {
     "pgbeam": "./dist/bin/pgbeam.js"
   },
