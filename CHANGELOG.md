@@ -1,5 +1,13 @@
 # @pgbeam/cli
 
+## 0.9.1
+
+### Patch Changes
+
+- 42cc17e: The npm listings link their source and issue tracker: `pgbeam`, `@pgbeam/openapi` and `@pgbeam/pulumi` now carry `repository` and `bugs` fields pointing at their public mirrors. All four lead their keywords with `ai-agents`, `mcp` and `database-security` and drop the pre-pivot `connection-pooling` and `query-caching`, and the `@pgbeam/pulumi` description names agent credentials and policy profiles instead of cache rules.
+- Updated dependencies [42cc17e]
+  - pgbeam@0.10.2
+
 ## 0.9.0
 
 ### Minor Changes
