@@ -36,6 +36,16 @@ vi.mock("./orgs.js", () => ({
   fetchOrganizations: (...args: unknown[]) => mockFetchOrganizations(...args),
 }));
 
+const mockReadStdin = vi.fn();
+vi.mock("./stdin.js", () => ({
+  readStdin: () => mockReadStdin(),
+}));
+
+const mockOutputJson = vi.fn();
+vi.mock("./output.js", () => ({
+  outputJson: (data: unknown) => mockOutputJson(data),
+}));
+
 import { input, password, select } from "@inquirer/prompts";
 import { consola } from "consola";
 import { loginWithApiKey, resolveLoginOrg } from "./auth";
@@ -82,6 +92,18 @@ describe("resolveLoginOrg", () => {
       }),
     );
   });
+
+  it("fails naming --org instead of prompting without a terminal", async () => {
+    const orgs = [
+      { id: "org-1", name: "Acme", slug: "acme" },
+      { id: "org-2", name: "Globex", slug: "globex" },
+    ];
+
+    await expect(resolveLoginOrg(orgs, false)).rejects.toThrow(
+      "Pass --org with one of: org-1 (Acme), org-2 (Globex).",
+    );
+    expect(select).not.toHaveBeenCalled();
+  });
 });
 
 describe("loginWithApiKey", () => {
@@ -90,7 +112,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(input).mockResolvedValue("ci");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme", slug: "acme" }]);
 
-    await loginWithApiKey();
+    await loginWithApiKey({ isTTY: true });
 
     expect(mockFetchOrganizations).toHaveBeenCalledWith("my-api-key");
     expect(setProfile).toHaveBeenCalledWith("ci", {
@@ -111,7 +133,7 @@ describe("loginWithApiKey", () => {
     ]);
     vi.mocked(select).mockResolvedValue("org-2");
 
-    await loginWithApiKey();
+    await loginWithApiKey({ isTTY: true });
 
     expect(setProfile).toHaveBeenCalledWith("default", {
       method: "api-key",
@@ -124,7 +146,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("bad-key");
     mockFetchOrganizations.mockRejectedValue({ status: 401, message: "unauthorized" });
 
-    await expect(loginWithApiKey()).rejects.toThrow("process.exit");
+    await expect(loginWithApiKey({ isTTY: true })).rejects.toThrow("process.exit");
 
     expect(setProfile).not.toHaveBeenCalled();
     expect(switchProfile).not.toHaveBeenCalled();
@@ -137,7 +159,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(input).mockResolvedValue("default");
     mockFetchOrganizations.mockRejectedValue(new TypeError("fetch failed"));
 
-    await loginWithApiKey();
+    await loginWithApiKey({ isTTY: true });
 
     expect(consola.warn).toHaveBeenCalledWith(expect.stringContaining("unverified"));
     expect(setProfile).toHaveBeenCalledWith("default", {
@@ -152,7 +174,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(input).mockResolvedValue("default");
     mockFetchOrganizations.mockResolvedValue([]);
 
-    await loginWithApiKey();
+    await loginWithApiKey({ isTTY: true });
 
     expect(setProfile).toHaveBeenCalledWith("default", {
       method: "api-key",
@@ -165,7 +187,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("my-api-key");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme", slug: "acme" }]);
 
-    await loginWithApiKey("custom-profile");
+    await loginWithApiKey({ profile: "custom-profile", isTTY: true });
 
     expect(input).not.toHaveBeenCalled();
     expect(setProfile).toHaveBeenCalledWith("custom-profile", {
@@ -178,7 +200,7 @@ describe("loginWithApiKey", () => {
   it("exits with error when no API key is provided", async () => {
     vi.mocked(password).mockResolvedValue("");
 
-    await expect(loginWithApiKey()).rejects.toThrow("process.exit");
+    await expect(loginWithApiKey({ isTTY: true })).rejects.toThrow("process.exit");
 
     expect(consola.error).toHaveBeenCalledWith("No API key provided.");
     expect(process.exit).toHaveBeenCalledWith(1);
@@ -190,7 +212,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(input).mockResolvedValue("default");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme", slug: "acme" }]);
 
-    await loginWithApiKey();
+    await loginWithApiKey({ isTTY: true });
 
     expect(input).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -205,7 +227,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(input).mockResolvedValue("default");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme", slug: "acme" }]);
 
-    await loginWithApiKey();
+    await loginWithApiKey({ isTTY: true });
 
     expect(consola.info).toHaveBeenCalledWith(expect.stringContaining("pgbeam projects list"));
   });
@@ -214,7 +236,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("tok");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme" }]);
 
-    await loginWithApiKey("staging");
+    await loginWithApiKey({ profile: "staging", isTTY: true });
 
     expect(switchProfile).toHaveBeenCalledWith("staging");
     expect(consola.info).toHaveBeenCalledWith(
@@ -227,7 +249,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("offline-key");
     mockFetchOrganizations.mockRejectedValue(new TypeError("fetch failed"));
 
-    await loginWithApiKey("staging");
+    await loginWithApiKey({ profile: "staging", isTTY: true });
 
     expect(switchProfile).toHaveBeenCalledWith("staging");
     expect(consola.info).toHaveBeenCalledWith(
@@ -240,7 +262,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("tok");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme" }]);
 
-    await loginWithApiKey("staging");
+    await loginWithApiKey({ profile: "staging", isTTY: true });
 
     expect(switchProfile).toHaveBeenCalledWith("staging");
     expect(consola.info).not.toHaveBeenCalledWith(
@@ -252,7 +274,7 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("tok");
     mockFetchOrganizations.mockResolvedValue([{ id: "org-1", name: "Acme" }]);
 
-    await loginWithApiKey("default");
+    await loginWithApiKey({ profile: "default", isTTY: true });
 
     expect(switchProfile).toHaveBeenCalledWith("default");
     expect(consola.info).not.toHaveBeenCalledWith(
@@ -265,9 +287,126 @@ describe("loginWithApiKey", () => {
     vi.mocked(password).mockResolvedValue("bad-key");
     mockFetchOrganizations.mockRejectedValue({ status: 403, message: "forbidden" });
 
-    await expect(loginWithApiKey("staging")).rejects.toThrow("process.exit");
+    await expect(loginWithApiKey({ profile: "staging", isTTY: true })).rejects.toThrow(
+      "process.exit",
+    );
 
     expect(setProfile).not.toHaveBeenCalled();
     expect(switchProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe("loginWithApiKey without prompts", () => {
+  const twoOrgs = [
+    { id: "org-1", name: "Acme", slug: "acme" },
+    { id: "org-2", name: "Globex", slug: "globex" },
+  ];
+
+  it("reads the key from stdin with --with-token and stores the --org it names", async () => {
+    mockReadStdin.mockResolvedValue("pbk_from_stdin\n");
+    mockFetchOrganizations.mockResolvedValue(twoOrgs);
+
+    await loginWithApiKey({ withToken: true, profile: "ci", org: "org-2", isTTY: true });
+
+    expect(mockFetchOrganizations).toHaveBeenCalledWith("pbk_from_stdin");
+    expect(setProfile).toHaveBeenCalledWith("ci", {
+      method: "api-key",
+      token: "pbk_from_stdin",
+      orgId: "org-2",
+    });
+    expect(switchProfile).toHaveBeenCalledWith("ci");
+    expect(password).not.toHaveBeenCalled();
+    expect(input).not.toHaveBeenCalled();
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("prints the stored profile and org under --json", async () => {
+    mockReadStdin.mockResolvedValue("pbk_json");
+    mockFetchOrganizations.mockResolvedValue(twoOrgs);
+
+    await loginWithApiKey({ withToken: true, profile: "ci", org: "org-1", json: true });
+
+    expect(mockOutputJson).toHaveBeenCalledWith({
+      profile: "ci",
+      method: "api-key",
+      verified: true,
+      orgId: "org-1",
+      orgName: "Acme",
+    });
+    expect(consola.success).not.toHaveBeenCalled();
+    expect(consola.info).not.toHaveBeenCalled();
+  });
+
+  it("reports an unverified key with no org as such under --json", async () => {
+    mockReadStdin.mockResolvedValue("pbk_offline");
+    mockFetchOrganizations.mockRejectedValue(new TypeError("fetch failed"));
+
+    await loginWithApiKey({ withToken: true, profile: "ci", json: true });
+
+    expect(mockOutputJson).toHaveBeenCalledWith({
+      profile: "ci",
+      method: "api-key",
+      verified: false,
+      orgId: null,
+      orgName: null,
+    });
+  });
+
+  it("stores --org as given when the key cannot be verified", async () => {
+    mockReadStdin.mockResolvedValue("pbk_offline");
+    mockFetchOrganizations.mockRejectedValue(new TypeError("fetch failed"));
+
+    await loginWithApiKey({ withToken: true, profile: "ci", org: "org-9" });
+
+    expect(setProfile).toHaveBeenCalledWith("ci", {
+      method: "api-key",
+      token: "pbk_offline",
+      orgId: "org-9",
+    });
+  });
+
+  it("refuses an --org the key cannot see and stores nothing", async () => {
+    mockReadStdin.mockResolvedValue("pbk_key");
+    mockFetchOrganizations.mockResolvedValue(twoOrgs);
+
+    await expect(loginWithApiKey({ withToken: true, profile: "ci", org: "org-9" })).rejects.toThrow(
+      "Organization org-9 is not visible to this key",
+    );
+    expect(setProfile).not.toHaveBeenCalled();
+    expect(switchProfile).not.toHaveBeenCalled();
+  });
+
+  it("fails naming --org when the key sees several orgs and stdin carried the key", async () => {
+    mockReadStdin.mockResolvedValue("pbk_key");
+    mockFetchOrganizations.mockResolvedValue(twoOrgs);
+
+    await expect(loginWithApiKey({ withToken: true, profile: "ci", isTTY: true })).rejects.toThrow(
+      "Pass --org",
+    );
+    expect(select).not.toHaveBeenCalled();
+    expect(setProfile).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty key on stdin before calling the API", async () => {
+    mockReadStdin.mockResolvedValue("  \n");
+
+    await expect(loginWithApiKey({ withToken: true, profile: "ci" })).rejects.toThrow(
+      "--with-token read an empty key from stdin.",
+    );
+    expect(mockFetchOrganizations).not.toHaveBeenCalled();
+  });
+
+  it("fails naming --profile before reading the key when there is no terminal", async () => {
+    await expect(loginWithApiKey({ withToken: true })).rejects.toThrow("Pass --profile <name>.");
+    expect(mockReadStdin).not.toHaveBeenCalled();
+    expect(input).not.toHaveBeenCalled();
+  });
+
+  it("fails naming --with-token instead of prompting for the key without a terminal", async () => {
+    await expect(loginWithApiKey({ profile: "ci", isTTY: false })).rejects.toThrow(
+      "Pipe it in with --with-token",
+    );
+    expect(password).not.toHaveBeenCalled();
+    expect(mockFetchOrganizations).not.toHaveBeenCalled();
   });
 });

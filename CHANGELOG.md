@@ -1,5 +1,11 @@
 # @pgbeam/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- ed30078: `pgbeam auth login --with-token` reads the API key from stdin and `--org` picks the organization, so `printf %s "$KEY" | pgbeam auth login --with-token --profile ci --org org_xxx` stores a verified profile with no prompt. Without a terminal, a prompt the flags leave open now fails at once and names the flag that replaces it instead of hanging, an `--org` the key cannot see is refused with nothing stored, and `--json` prints the stored `profile`, `method`, `verified`, `orgId` and `orgName`.
+
 ## 0.8.0
 
 ### Minor Changes
